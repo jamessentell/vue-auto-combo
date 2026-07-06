@@ -1,0 +1,62 @@
+{
+  "name": "vue-auto-combo",
+  "version": "0.1.0",
+  "description": "A dependency-free, accessible autocomplete / combo box component for Vue 3",
+  "type": "module",
+  "license": "MIT",
+  "author": "James Sentell <jamessentell1@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jamessentell/vue-auto-combo.git"
+  },
+  "homepage": "https://github.com/jamessentell/vue-auto-combo#readme",
+  "bugs": "https://github.com/jamessentell/vue-auto-combo/issues",
+  "keywords": [
+    "vue",
+    "vue3",
+    "autocomplete",
+    "combobox",
+    "multiselect",
+    "typeahead",
+    "component"
+  ],
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/vue-auto-combo.umd.cjs",
+  "module": "./dist/vue-auto-combo.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/vue-auto-combo.js",
+      "require": "./dist/vue-auto-combo.umd.cjs"
+    },
+    "./style.css": "./dist/vue-auto-combo.css"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && vue-tsc --declaration --emitDeclarationOnly -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
+  },
+  "peerDependencies": {
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@storybook/addon-docs": "^10.4.6",
+    "@storybook/vue3-vite": "^10.4.6",
+    "@types/node": "^26.1.0",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vue/test-utils": "^2.4.11",
+    "jsdom": "^29.1.1",
+    "storybook": "^10.4.6",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.3",
+    "vitest": "^4.1.10",
+    "vue": "^3.5.39",
+    "vue-tsc": "^3.3.6"
+  }
+}
