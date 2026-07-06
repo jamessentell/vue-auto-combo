@@ -1,5 +1,8 @@
 # vue-auto-combo
 
+[![CI](https://github.com/jamessentell/vue-auto-combo/actions/workflows/ci.yml/badge.svg)](https://github.com/jamessentell/vue-auto-combo/actions/workflows/ci.yml)
+**[Live Storybook demo →](https://jamessentell.github.io/vue-auto-combo/)**
+
 A fully-featured, dependency-free autocomplete / combo box component for Vue 3,
 built on raw HTML elements and the
 [WAI-ARIA combobox pattern](https://www.w3.org/WAI/ARIA/apg/patterns/combobox/).

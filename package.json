@@ -4,6 +4,7 @@
   "description": "A dependency-free, accessible autocomplete / combo box component for Vue 3",
   "type": "module",
   "license": "MIT",
+  "packageManager": "pnpm@10.12.4",
   "author": "James Sentell <jamessentell1@gmail.com>",
   "repository": {
     "type": "git",
