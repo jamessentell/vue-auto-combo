@@ -98,6 +98,14 @@ describe('1. core autocomplete behavior', () => {
     expect(wrapper.emitted('remove')).toEqual([['Apple']])
     wrapper.unmount()
   })
+
+  it('normalizes duplicate option labels before rendering list items', async () => {
+    const wrapper = mountCombo({ options: ['Apple', 'Apple', 'Banana', 'Banana'] })
+    await input(wrapper).trigger('focus')
+    expect(optionTexts(wrapper)).toEqual(['Apple', 'Banana'])
+    expect(new Set(wrapper.findAll('[role="option"]').map((o) => o.attributes('id'))).size).toBe(2)
+    wrapper.unmount()
+  })
 })
 
 describe('2. selection modes', () => {
@@ -253,6 +261,36 @@ describe('4. free text vs. strict mode', () => {
     expect(wrapper.props('modelValue')).toEqual(['Dragonfruit'])
     wrapper.unmount()
   })
+
+  it('does not emit create when a novel free-text value is blocked by maxSelections', async () => {
+    const wrapper = mountCombo({
+      freeText: true,
+      multiple: true,
+      modelValue: ['Apple'],
+      maxSelections: 1,
+    })
+    await type(wrapper, 'Dragonfruit')
+    expect(wrapper.find('.ac-option--create').exists()).toBe(false)
+    await key(wrapper, 'Enter')
+    expect(wrapper.props('modelValue')).toEqual(['Apple'])
+    expect(wrapper.emitted('create')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('does not toggle off an already-selected exact match hidden by a custom filter', async () => {
+    const wrapper = mountCombo({
+      freeText: true,
+      multiple: true,
+      modelValue: ['Apple'],
+      filter: () => false,
+    })
+    await type(wrapper, 'apple')
+    await key(wrapper, 'Enter')
+    expect(wrapper.props('modelValue')).toEqual(['Apple'])
+    expect(wrapper.emitted('remove')).toBeUndefined()
+    expect(wrapper.emitted('create')).toBeUndefined()
+    wrapper.unmount()
+  })
 })
 
 describe('5. keyboard interaction', () => {
@@ -379,6 +417,17 @@ describe('7. general API and states', () => {
 
     await wrapper.find('.ac-chip__remove').trigger('click')
     expect(wrapper.props('modelValue')).toEqual(['Apple'])
+    wrapper.unmount()
+  })
+
+  it('R7.2 closes the dropdown when disabled becomes true', async () => {
+    const wrapper = mountCombo()
+    await input(wrapper).trigger('focus')
+    expect(wrapper.find('[role="listbox"]').isVisible()).toBe(true)
+
+    await wrapper.setProps({ disabled: true })
+    expect(wrapper.find('[role="listbox"]').isVisible()).toBe(false)
+    expect(input(wrapper).attributes('disabled')).toBeDefined()
     wrapper.unmount()
   })
 

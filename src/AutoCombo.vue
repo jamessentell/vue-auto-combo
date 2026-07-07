@@ -70,8 +70,14 @@ const query = ref('')
 const isOpen = ref(false)
 const activeIndex = ref(-1)
 
-const selectedValues = computed<string[]>(() => {
-  if (props.multiple) return Array.isArray(props.modelValue) ? props.modelValue : []
+function uniqueValues(values: string[]) {
+  return [...new Set(values)]
+}
+
+const normalizedOptions = computed(() => uniqueValues(props.options))
+
+const selectedValues = computed(() => {
+  if (props.multiple) return Array.isArray(props.modelValue) ? uniqueValues(props.modelValue) : []
   return typeof props.modelValue === 'string' && props.modelValue !== '' ? [props.modelValue] : []
 })
 
@@ -84,6 +90,7 @@ const hasSelection = computed(() => selectedValues.value.length > 0)
 const atMax = computed(
   () =>
     props.multiple &&
+    Number.isFinite(props.maxSelections) &&
     props.maxSelections !== undefined &&
     selectedValues.value.length >= props.maxSelections,
 )
@@ -95,14 +102,14 @@ const filteredOptions = computed(() => {
   const q = query.value.trim()
   // Reopening a single-select whose input still shows the committed value
   // should offer every option again, not just the committed one.
-  if (!q || (!props.multiple && q === singleValue.value)) return props.options
+  if (!q || (!props.multiple && q === singleValue.value)) return normalizedOptions.value
   const match = props.filter ?? defaultFilter
-  return props.options.filter((o) => match(o, q))
+  return normalizedOptions.value.filter((o) => match(o, q))
 })
 
 const exactMatch = computed(() => {
   const q = query.value.trim().toLowerCase()
-  return props.options.find((o) => o.toLowerCase() === q) ?? null
+  return normalizedOptions.value.find((o) => o.toLowerCase() === q) ?? null
 })
 
 interface ListItem {
@@ -111,9 +118,17 @@ interface ListItem {
 }
 
 const items = computed<ListItem[]>(() => {
+  const trimmedQuery = query.value.trim()
   const list: ListItem[] = filteredOptions.value.map((value) => ({ kind: 'option', value }))
-  if (props.freeText && props.createOption && query.value.trim() && !exactMatch.value) {
-    list.push({ kind: 'create', value: query.value.trim() })
+  if (
+    props.freeText &&
+    props.createOption &&
+    trimmedQuery &&
+    !exactMatch.value &&
+    !isSelected(trimmedQuery) &&
+    !(props.multiple && atMax.value)
+  ) {
+    list.push({ kind: 'create', value: trimmedQuery })
   }
   return list
 })
@@ -182,11 +197,18 @@ function commitOption(value: string) {
 
 function commitItem(item: ListItem) {
   if (item.kind === 'create') {
-    emit('create', item.value)
-    commitOption(item.value)
+    commitCreatedValue(item.value)
   } else {
     commitOption(item.value)
   }
+}
+
+function commitCreatedValue(value: string) {
+  const trimmedValue = value.trim()
+  if (!trimmedValue) return
+  if (props.multiple && (isSelected(trimmedValue) || atMax.value)) return
+  emit('create', trimmedValue)
+  commitOption(trimmedValue)
 }
 
 function removeValue(value: string) {
@@ -267,10 +289,13 @@ function onKeydown(event: KeyboardEvent) {
         // option, anything else is created (R4.2/R4.3).
         const existing = exactMatch.value
         if (existing) {
-          commitOption(existing)
+          if (props.multiple && isSelected(existing)) {
+            query.value = ''
+          } else {
+            commitOption(existing)
+          }
         } else {
-          emit('create', query.value.trim())
-          commitOption(query.value.trim())
+          commitCreatedValue(query.value)
         }
       }
       break
@@ -320,6 +345,10 @@ function onDocumentMousedown(event: MouseEvent) {
 
 onMounted(() => document.addEventListener('mousedown', onDocumentMousedown))
 onBeforeUnmount(() => document.removeEventListener('mousedown', onDocumentMousedown))
+
+watch(() => props.disabled, (disabled) => {
+  if (disabled) close()
+})
 
 // Keep the input text in sync when a single-select model changes from outside.
 watch(singleValue, (value) => {
