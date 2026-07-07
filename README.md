@@ -20,9 +20,37 @@ The full behavioral requirements live in [spec.md](./spec.md).
 
 ## Usage
 
+> **Not on npm yet** — install it straight from a local clone.
+
+First, clone and build the library:
+
 ```bash
-pnpm add vue-auto-combo
+git clone https://github.com/jamessentell/vue-auto-combo.git
+cd vue-auto-combo
+pnpm install
+pnpm build   # emits dist/ (ESM + UMD + types + CSS) — required, the package entry points live in dist/
 ```
+
+Then add it to your project in one of three ways:
+
+```bash
+# Option A — path dependency (simplest; pnpm symlinks the folder)
+pnpm add /path/to/vue-auto-combo
+
+# Option B — packed tarball (closest to a real npm install)
+pnpm pack                                  # run inside vue-auto-combo/, produces vue-auto-combo-0.1.0.tgz
+pnpm add /path/to/vue-auto-combo-0.1.0.tgz # run inside your project
+
+# Option C — global link (for developing the library and app side by side)
+pnpm link --global                         # run inside vue-auto-combo/
+pnpm link --global vue-auto-combo          # run inside your project
+```
+
+With options A and C the install points at the live folder, so re-run `pnpm build`
+(or keep `pnpm exec vite build --watch` running) after changing the component to
+refresh `dist/`. With option B, re-pack and re-add to pick up changes.
+
+Once installed, imports work exactly as they will when it ships to npm:
 
 ```vue
 <script setup>
