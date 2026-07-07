@@ -59,6 +59,7 @@ Or register globally: `app.use(VueAutoCombo)` (default export).
 | `clearable` | `boolean` | `true` | Show a clear-all button |
 | `noResultsText` | `string` | `'No matching options'` | Empty-state message |
 | `label` | `string` | — | Visible `<label>` (or `aria-label` with `hideLabel`) |
+| `ariaLabel` | `string` | — | Accessible name used when no visible label is rendered |
 | `hideLabel` | `boolean` | `false` | Use `label` as `aria-label` only |
 | `openOnFocus` | `boolean` | `true` | Open the dropdown on focus/click |
 

@@ -99,7 +99,8 @@ third-party runtime dependencies, and follows the
   input (focus never leaves the input while navigating).
 - **R6.4** A visible label can be associated via the `label` prop (rendered
   `<label for>`); `aria-label` is used as a fallback via the same prop when
-  `hideLabel` is set.
+  `hideLabel` is set. When no visible label is rendered, `ariaLabel`,
+  `placeholder`, or a generic fallback keeps the input named.
 - **R6.5** Chip remove buttons have `aria-label="Remove <value>"` (R3.5).
 - **R6.6** All interactive parts have visible keyboard focus styling.
 

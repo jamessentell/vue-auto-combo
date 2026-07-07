@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import AutoCombo from '../src/AutoCombo.vue'
+import autoComboSource from '../src/AutoCombo.vue?raw'
 
 const FRUITS = ['Apple', 'Apricot', 'Banana', 'Blueberry', 'Cherry', 'Grape']
 
@@ -398,12 +399,63 @@ describe('6. accessibility', () => {
     const labelEl = visible.find('label')
     expect(labelEl.text()).toBe('Fruit')
     expect(labelEl.attributes('for')).toBe(input(visible).attributes('id'))
+    expect(input(visible).attributes('aria-label')).toBeUndefined()
     visible.unmount()
 
     const hidden = mountCombo({ label: 'Fruit', hideLabel: true })
     expect(hidden.find('label').exists()).toBe(false)
     expect(input(hidden).attributes('aria-label')).toBe('Fruit')
     hidden.unmount()
+  })
+
+  it('provides an accessible input name when no visible label is rendered', () => {
+    const named = mountCombo({ ariaLabel: 'Choose fruit' })
+    expect(named.find('label').exists()).toBe(false)
+    expect(input(named).attributes('aria-label')).toBe('Choose fruit')
+    named.unmount()
+
+    const placeholderFallback = mountCombo({ placeholder: 'Search fruit' })
+    expect(input(placeholderFallback).attributes('aria-label')).toBe('Search fruit')
+    placeholderFallback.unmount()
+
+    const defaultFallback = mountCombo()
+    expect(input(defaultFallback).attributes('aria-label')).toBe('Autocomplete')
+    defaultFallback.unmount()
+  })
+
+  it('describes selected multi-select values to assistive technology', () => {
+    const wrapper = mountCombo({
+      multiple: true,
+      modelValue: ['Apple', 'Cherry'],
+      label: 'Fruit',
+    })
+    const descriptionIds = input(wrapper).attributes('aria-describedby')?.split(' ') ?? []
+    const selectedDescription = wrapper.find('.ac-sr-only')
+
+    expect(selectedDescription.text()).toBe('Selected: Apple, Cherry')
+    expect(descriptionIds).toContain(selectedDescription.attributes('id'))
+    wrapper.unmount()
+  })
+
+  it('announces result counts and empty states through a polite status region', async () => {
+    const wrapper = mountCombo({ label: 'Fruit' })
+    const status = () => wrapper.find('[role="status"]')
+
+    await type(wrapper, 'ap')
+    expect(status().attributes('aria-live')).toBe('polite')
+    expect(status().text()).toBe('3 suggestions available.')
+    expect(input(wrapper).attributes('aria-describedby')?.split(' ')).toContain(
+      status().attributes('id'),
+    )
+
+    await type(wrapper, 'zzz')
+    expect(status().text()).toBe('No matching options')
+    wrapper.unmount()
+  })
+
+  it('uses a larger chip remove target for pointer and touch users', () => {
+    expect(autoComboSource).toMatch(/\.ac-chip__remove\s*{[^}]*width:\s*24px;/s)
+    expect(autoComboSource).toMatch(/\.ac-chip__remove\s*{[^}]*height:\s*24px;/s)
   })
 })
 

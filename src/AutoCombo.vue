@@ -26,6 +26,8 @@ export interface AutoComboProps {
   noResultsText?: string
   /** Accessible label. Rendered as a visible <label> unless `hideLabel` is set. */
   label?: string
+  /** Accessible name used when no visible label is rendered. */
+  ariaLabel?: string
   hideLabel?: boolean
   /** Open the dropdown when the input gains focus or is clicked. */
   openOnFocus?: boolean
@@ -44,6 +46,7 @@ const props = withDefaults(defineProps<AutoComboProps>(), {
   clearable: true,
   noResultsText: 'No matching options',
   label: undefined,
+  ariaLabel: undefined,
   hideLabel: false,
   openOnFocus: true,
 })
@@ -61,6 +64,8 @@ const emit = defineEmits<{
 const uid = useId()
 const inputId = `${uid}-input`
 const listboxId = `${uid}-listbox`
+const selectedDescriptionId = `${uid}-selected`
+const statusId = `${uid}-status`
 
 const rootEl = ref<HTMLElement | null>(null)
 const inputEl = ref<HTMLInputElement | null>(null)
@@ -143,6 +148,30 @@ const activeDescendant = computed(() =>
 
 const shownPlaceholder = computed(() =>
   props.multiple && hasSelection.value ? '' : props.placeholder,
+)
+
+const inputLabel = computed(() => {
+  if (props.label && !props.hideLabel) return undefined
+  return props.label || props.ariaLabel || props.placeholder || 'Autocomplete'
+})
+
+const selectedDescription = computed(() => {
+  if (!props.multiple || !selectedValues.value.length) return ''
+  return `Selected: ${selectedValues.value.join(', ')}`
+})
+
+const statusText = computed(() => {
+  if (!isOpen.value) return ''
+  if (!items.value.length) return props.noResultsText
+  const count = items.value.length
+  return `${count} ${count === 1 ? 'suggestion' : 'suggestions'} available.`
+})
+
+const inputDescriptionIds = computed(() =>
+  [
+    selectedDescription.value ? selectedDescriptionId : '',
+    statusText.value ? statusId : '',
+  ].filter(Boolean).join(' ') || undefined,
 )
 
 function isSelected(value: string) {
@@ -397,7 +426,8 @@ function highlightParts(option: string): [string, string, string] {
         :value="query"
         :placeholder="shownPlaceholder"
         :disabled="disabled"
-        :aria-label="label && hideLabel ? label : undefined"
+        :aria-label="inputLabel"
+        :aria-describedby="inputDescriptionIds"
         :aria-expanded="isOpen"
         aria-autocomplete="list"
         :aria-controls="listboxId"
@@ -408,6 +438,22 @@ function highlightParts(option: string): [string, string, string] {
         @focus="onFocus"
         @blur="onBlur"
       />
+      <span
+        v-if="selectedDescription"
+        :id="selectedDescriptionId"
+        class="ac-sr-only"
+      >
+        {{ selectedDescription }}
+      </span>
+      <span
+        :id="statusId"
+        class="ac-sr-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {{ statusText }}
+      </span>
       <button
         v-if="clearable && hasSelection && !disabled"
         type="button"
@@ -522,6 +568,18 @@ function highlightParts(option: string): [string, string, string] {
   color: var(--ac-muted);
 }
 
+.ac-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .ac-chip {
   display: inline-flex;
   align-items: center;
@@ -538,8 +596,8 @@ function highlightParts(option: string): [string, string, string] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: none;
   border-radius: 50%;
