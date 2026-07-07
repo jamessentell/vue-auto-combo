@@ -18,6 +18,10 @@ third-party runtime dependencies, and follows the
   via the `noResultsText` prop). In free-text mode an "Add …" affordance is
   shown instead (see R4), unless it is disabled via `createOption: false`
   (R4.5), in which case the "no results" message is shown again.
+- **R1.9** `showNoResults: false` suppresses the no-results message. With
+  nothing to render, the dropdown panel is hidden entirely (no empty box),
+  `aria-expanded` reports collapsed, and the screen-reader status region stays
+  silent; the panel reappears as soon as something matches. Default: `true`.
 - **R1.7** The dropdown opens on typing, on ArrowDown/ArrowUp, and on clicking
   the input; it closes on selection (single-select), Escape, blur/click
   outside, or Tab.

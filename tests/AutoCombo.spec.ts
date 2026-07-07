@@ -74,6 +74,30 @@ describe('1. core autocomplete behavior', () => {
     wrapper.unmount()
   })
 
+  it('R1.9 showNoResults=false hides the message and the dropdown panel when nothing matches', async () => {
+    const wrapper = mountCombo({ showNoResults: false })
+    await type(wrapper, 'zzz')
+    expect(wrapper.find('.ac-empty').exists()).toBe(false)
+    expect(wrapper.find('[role="listbox"]').isVisible()).toBe(false)
+    expect(input(wrapper).attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('[role="status"]').text()).toBe('')
+
+    // The panel comes back as soon as something matches again.
+    await type(wrapper, 'ap')
+    expect(wrapper.find('[role="listbox"]').isVisible()).toBe(true)
+    expect(input(wrapper).attributes('aria-expanded')).toBe('true')
+    expect(optionTexts(wrapper)).toEqual(['Apple', 'Apricot', 'Grape'])
+    wrapper.unmount()
+  })
+
+  it('R1.9 showNoResults defaults to true and keeps the current empty-state behavior', async () => {
+    const wrapper = mountCombo()
+    await type(wrapper, 'zzz')
+    expect(wrapper.find('.ac-empty').isVisible()).toBe(true)
+    expect(input(wrapper).attributes('aria-expanded')).toBe('true')
+    wrapper.unmount()
+  })
+
   it('R1.7 opens on focus/typing and closes on outside mousedown', async () => {
     const wrapper = mountCombo()
     await input(wrapper).trigger('focus')

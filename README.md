@@ -58,6 +58,7 @@ Or register globally: `app.use(VueAutoCombo)` (default export).
 | `disabled` | `boolean` | `false` | Disable the whole control |
 | `clearable` | `boolean` | `true` | Show a clear-all button |
 | `noResultsText` | `string` | `'No matching options'` | Empty-state message |
+| `showNoResults` | `boolean` | `true` | Show the empty-state message; when `false` the dropdown hides entirely while nothing matches |
 | `label` | `string` | — | Visible `<label>` (or `aria-label` with `hideLabel`) |
 | `ariaLabel` | `string` | — | Accessible name used when no visible label is rendered |
 | `hideLabel` | `boolean` | `false` | Use `label` as `aria-label` only |

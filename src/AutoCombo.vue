@@ -24,6 +24,8 @@ export interface AutoComboProps {
   clearable?: boolean
   /** Message shown when nothing matches (strict mode). */
   noResultsText?: string
+  /** Show the no-results message when nothing matches; when false the dropdown hides instead. */
+  showNoResults?: boolean
   /** Accessible label. Rendered as a visible <label> unless `hideLabel` is set. */
   label?: string
   /** Accessible name used when no visible label is rendered. */
@@ -45,6 +47,7 @@ const props = withDefaults(defineProps<AutoComboProps>(), {
   disabled: false,
   clearable: true,
   noResultsText: 'No matching options',
+  showNoResults: true,
   label: undefined,
   ariaLabel: undefined,
   hideLabel: false,
@@ -142,6 +145,12 @@ watch(items, (list) => {
   activeIndex.value = list.length ? 0 : -1
 })
 
+// With the no-results row suppressed, an open dropdown with no items renders
+// nothing — reflect that in visibility and aria-expanded alike.
+const panelVisible = computed(
+  () => isOpen.value && (items.value.length > 0 || props.showNoResults),
+)
+
 const activeDescendant = computed(() =>
   isOpen.value && activeIndex.value >= 0 ? `${uid}-opt-${activeIndex.value}` : undefined,
 )
@@ -162,7 +171,7 @@ const selectedDescription = computed(() => {
 
 const statusText = computed(() => {
   if (!isOpen.value) return ''
-  if (!items.value.length) return props.noResultsText
+  if (!items.value.length) return props.showNoResults ? props.noResultsText : ''
   const count = items.value.length
   return `${count} ${count === 1 ? 'suggestion' : 'suggestions'} available.`
 })
@@ -428,7 +437,7 @@ function highlightParts(option: string): [string, string, string] {
         :disabled="disabled"
         :aria-label="inputLabel"
         :aria-describedby="inputDescriptionIds"
-        :aria-expanded="isOpen"
+        :aria-expanded="panelVisible"
         aria-autocomplete="list"
         :aria-controls="listboxId"
         aria-haspopup="listbox"
@@ -465,7 +474,14 @@ function highlightParts(option: string): [string, string, string] {
         &times;
       </button>
     </div>
-    <ul v-show="isOpen" :id="listboxId" ref="listEl" class="ac-listbox" role="listbox" :aria-multiselectable="multiple || undefined">
+    <ul
+      v-show="panelVisible"
+      :id="listboxId"
+      ref="listEl"
+      class="ac-listbox"
+      role="listbox"
+      :aria-multiselectable="multiple || undefined"
+    >
       <li
         v-for="(item, index) in items"
         :id="`${uid}-opt-${index}`"
@@ -495,7 +511,7 @@ function highlightParts(option: string): [string, string, string] {
           <span class="ac-option__text">Add "{{ item.value }}"</span>
         </template>
       </li>
-      <li v-if="!items.length" class="ac-empty" role="presentation">{{ noResultsText }}</li>
+      <li v-if="!items.length && showNoResults" class="ac-empty" role="presentation">{{ noResultsText }}</li>
     </ul>
   </div>
 </template>
