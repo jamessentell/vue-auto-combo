@@ -65,6 +65,8 @@ npm install github:jamessentell/vue-auto-combo
 
 # pin to a specific branch, tag, or commit
 pnpm add jamessentell/vue-auto-combo#main
+pnpm add jamessentell/vue-auto-combo#v0.1.0
+pnpm add jamessentell/vue-auto-combo#<commit-sha> # Most reproducible
 ```
 
 To pick up upstream changes later, re-run the install (or `pnpm update vue-auto-combo`).
