@@ -20,7 +20,9 @@ The full behavioral requirements live in [spec.md](./spec.md).
 
 ## Usage
 
-> **Not on npm yet** — install it straight from a local clone.
+> **Not on the npm registry yet** — install it from a local clone, or straight from GitHub.
+
+### Install from a local clone (recommended)
 
 First, clone and build the library:
 
@@ -49,6 +51,27 @@ pnpm link --global vue-auto-combo          # run inside your project
 With options A and C the install points at the live folder, so re-run `pnpm build`
 (or keep `pnpm exec vite build --watch` running) after changing the component to
 refresh `dist/`. With option B, re-pack and re-add to pick up changes.
+
+### Install from GitHub
+
+The package can also be installed directly from the GitHub repository. A `prepare`
+script builds `dist/` automatically during install, so no manual build step is
+needed:
+
+```bash
+pnpm add jamessentell/vue-auto-combo
+# or
+npm install github:jamessentell/vue-auto-combo
+
+# pin to a specific branch, tag, or commit
+pnpm add jamessentell/vue-auto-combo#main
+```
+
+To pick up upstream changes later, re-run the install (or `pnpm update vue-auto-combo`).
+
+> pnpm 10+ blocks dependency build scripts by default — if the install warns
+> about ignored build scripts (imports fail because `dist/` is missing), run
+> `pnpm approve-builds` and allow `vue-auto-combo`.
 
 Once installed, imports work exactly as they will when it ships to npm:
 
