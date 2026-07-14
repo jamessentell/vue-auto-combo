@@ -16,6 +16,10 @@ The full behavioral requirements live in [spec.md](./spec.md).
 - Strict mode (values must come from `options`) or free-text entry (`freeText: true`) with a `create` event
 - Full keyboard support: arrows, Home/End, Enter, Escape, Tab, Backspace-to-remove-chip
 - Accessible: combobox/listbox roles, `aria-activedescendant`, labelled chip remove buttons
+- Client-side validation: `rules` functions, a `validation` event, and an exposed `validate()` method
+- `prefix` / `suffix` slots for icons or icon buttons inside the control
+- Loading spinner (`loading`) — a purely visual busy indicator inside the control
+- Character counter (`showCounter`) with native `maxlength` enforcement
 - Themeable via `--ac-*` CSS custom properties; zero runtime dependencies besides Vue
 
 ## Usage
@@ -91,10 +95,29 @@ Or register globally: `app.use(VueAutoCombo)` (default export).
 | `ariaLabel` | `string` | — | Accessible name used when no visible label is rendered |
 | `hideLabel` | `boolean` | `false` | Use `label` as `aria-label` only |
 | `openOnFocus` | `boolean` | `true` | Open the dropdown on focus/click |
+| `rules` | `Array<(value) => true \| string>` | — | Validation rules; run on change and blur, first failing message is shown |
+| `loading` | `boolean` | `false` | Show a spinner in the control (purely visual) |
+| `showCounter` | `boolean` | `false` | Show a character counter for the search text |
+| `maxlength` | `number` | — | Max search-text length (native enforcement + counter) |
 
 ### Events
 
-`update:modelValue`, `search`, `open`, `close`, `select`, `remove`, `create`
+`update:modelValue`, `search`, `open`, `close`, `select`, `remove`, `create`,
+`validation` (`(valid: boolean, message: string | null)`, emitted on every validation run)
+
+### Slots
+
+| Slot | Description |
+| --- | --- |
+| `prefix` | Rendered at the front of the control, before chips and the input — icons or icon buttons; interactive elements keep their native behavior |
+| `suffix` | Rendered after the input, before the clear button |
+
+### Exposed methods (template ref)
+
+| Method | Description |
+| --- | --- |
+| `validate(): boolean` | Run `rules` now (e.g. on form submit); shows/clears the message and returns validity |
+| `focus(): void` | Focus the text input |
 
 ## Development
 

@@ -1,6 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import { ref, watch } from 'vue'
 import AutoCombo from '../src/AutoCombo.vue'
+import type { AutoComboValue } from '../src/AutoCombo.vue'
+
+/** Number of selected values regardless of single/multi mode. */
+const selectionCount = (value: AutoComboValue) =>
+  Array.isArray(value) ? value.length : value ? 1 : 0
 
 const FRUITS = [
   'Apple',
@@ -40,6 +45,7 @@ const meta: Meta<typeof AutoCombo> = {
   argTypes: {
     modelValue: { control: false },
     filter: { control: false },
+    rules: { control: false },
   },
 }
 
@@ -156,5 +162,114 @@ export const OpenOnFocusDisabled: Story = {
   args: {
     openOnFocus: false,
     placeholder: 'Type or press ↓ to open',
+  },
+}
+
+export const Validation: Story = {
+  name: 'Validation (rules)',
+  render: bound([]),
+  args: {
+    multiple: true,
+    label: 'Pick 2 to 4 fruits',
+    rules: [
+      (value: AutoComboValue) => selectionCount(value) > 0 || 'Pick at least one fruit',
+      (value: AutoComboValue) => selectionCount(value) >= 2 || 'Pick at least 2 fruits',
+      (value: AutoComboValue) => selectionCount(value) <= 4 || 'No more than 4 fruits',
+    ],
+  },
+}
+
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
+
+export const PrefixIconButton: Story = {
+  name: 'Prefix / suffix slots',
+  render: (args) => ({
+    components: { AutoCombo },
+    setup() {
+      const value = ref<string | null>(null)
+      const month = ref<string | null>(null)
+      return { args, value, month, MONTHS }
+    },
+    template: `
+      <div style="min-height: 320px; display: flex; flex-direction: column; gap: 1.5rem; font-family: system-ui, sans-serif;">
+        <div>
+          <AutoCombo v-bind="args" v-model="value">
+            <template #prefix>
+              <button
+                type="button"
+                aria-label="Scan barcode"
+                style="display: inline-flex; border: none; background: none; padding: 4px; cursor: pointer; border-radius: 4px;"
+                @click="value = 'Mango'"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="7" />
+                  <line x1="21" y1="21" x2="16.5" y2="16.5" />
+                </svg>
+              </button>
+            </template>
+            <template #suffix>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2l2.4 6.9H22l-5.8 4.4 2.2 6.9-6.4-4.2-6.4 4.2 2.2-6.9L2 8.9h7.6z" />
+              </svg>
+            </template>
+          </AutoCombo>
+          <p style="margin-top: 0.5rem; color: #666; font-size: 0.85rem;">
+            The magnifier is a real <code>&lt;button&gt;</code> (clicking it selects Mango without
+            stealing focus into the input); the star is decorative suffix content.
+          </p>
+        </div>
+        <div>
+          <AutoCombo v-model="month" :options="MONTHS" label="Month" placeholder="Pick a month…">
+            <template #prefix>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="4" width="18" height="17" rx="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+            </template>
+          </AutoCombo>
+          <p style="margin-top: 0.5rem; color: #666; font-size: 0.85rem;">
+            The calendar icon is plain decorative prefix content: clicking it focuses the input
+            and opens the dropdown, like clicking anywhere else in the control.
+          </p>
+        </div>
+      </div>
+    `,
+  }),
+  args: {
+    placeholder: 'Search fruit…',
+  },
+}
+
+export const Loading: Story = {
+  render: bound(null),
+  args: {
+    loading: true,
+    placeholder: 'Spinner shows while loading is true…',
+  },
+}
+
+export const CharacterCounter: Story = {
+  name: 'Character counter',
+  render: bound(null),
+  args: {
+    freeText: true,
+    showCounter: true,
+    maxlength: 20,
+    placeholder: 'Max 20 characters…',
   },
 }

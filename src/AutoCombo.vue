@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 
+export type AutoComboValue = string | string[] | null
+
 export interface AutoComboProps {
   /** Selected value(s). `string | null` in single-select, `string[]` in multi-select. */
   modelValue?: string | string[] | null
@@ -33,6 +35,14 @@ export interface AutoComboProps {
   hideLabel?: boolean
   /** Open the dropdown when the input gains focus or is clicked. */
   openOnFocus?: boolean
+  /** Validation rules; each returns `true` when valid or an error message string. */
+  rules?: Array<(value: AutoComboValue) => true | string>
+  /** Show a loading spinner in the control. Purely visual. */
+  loading?: boolean
+  /** Show a character counter for the search text below the control. */
+  showCounter?: boolean
+  /** Maximum search-text length, enforced on the input and reflected by the counter. */
+  maxlength?: number
 }
 
 const props = withDefaults(defineProps<AutoComboProps>(), {
@@ -52,6 +62,10 @@ const props = withDefaults(defineProps<AutoComboProps>(), {
   ariaLabel: undefined,
   hideLabel: false,
   openOnFocus: true,
+  rules: undefined,
+  loading: false,
+  showCounter: false,
+  maxlength: undefined,
 })
 
 const emit = defineEmits<{
@@ -62,6 +76,7 @@ const emit = defineEmits<{
   select: [value: string]
   remove: [value: string]
   create: [value: string]
+  validation: [valid: boolean, message: string | null]
 }>()
 
 const uid = useId()
@@ -69,6 +84,7 @@ const inputId = `${uid}-input`
 const listboxId = `${uid}-listbox`
 const selectedDescriptionId = `${uid}-selected`
 const statusId = `${uid}-status`
+const errorId = `${uid}-error`
 
 const rootEl = ref<HTMLElement | null>(null)
 const inputEl = ref<HTMLInputElement | null>(null)
@@ -176,10 +192,55 @@ const statusText = computed(() => {
   return `${count} ${count === 1 ? 'suggestion' : 'suggestions'} available.`
 })
 
+// --- Validation (R8) ---
+
+const validationMessage = ref<string | null>(null)
+
+/**
+ * Runs the `rules` against the current model value, updates the shown message,
+ * and emits `validation`. Also exposed so parents can trigger it (e.g. on
+ * form submit). Returns whether the value is valid.
+ */
+function runValidation(): boolean {
+  let message: string | null = null
+  for (const rule of props.rules ?? []) {
+    const result = rule(props.modelValue ?? null)
+    if (result !== true) {
+      message = result
+      break
+    }
+  }
+  validationMessage.value = message
+  const valid = message === null
+  emit('validation', valid, message)
+  return valid
+}
+
+watch(
+  () => props.modelValue,
+  () => {
+    if (props.rules?.length) runValidation()
+  },
+  { deep: true },
+)
+
+const errorText = computed(() => validationMessage.value || '')
+const invalid = computed(() => !!errorText.value)
+
+const counterText = computed(() => {
+  const length = query.value.length
+  return props.maxlength !== undefined ? `${length} / ${props.maxlength}` : `${length}`
+})
+
+const atCharLimit = computed(
+  () => props.maxlength !== undefined && query.value.length >= props.maxlength,
+)
+
 const inputDescriptionIds = computed(() =>
   [
     selectedDescription.value ? selectedDescriptionId : '',
     statusText.value ? statusId : '',
+    errorText.value ? errorId : '',
   ].filter(Boolean).join(' ') || undefined,
 )
 
@@ -213,6 +274,8 @@ function closeAndReconcile() {
   } else {
     query.value = singleValue.value ?? ''
   }
+  // Leaving the field is the natural "touched" point for validation (R8.2).
+  if (props.rules?.length) runValidation()
 }
 
 function commitOption(value: string) {
@@ -370,6 +433,10 @@ function onBlur(event: FocusEvent) {
 
 function onControlMousedown(event: MouseEvent) {
   if (props.disabled) return
+  // Interactive elements inside the prefix/suffix slots (e.g. icon buttons)
+  // keep their native behavior instead of redirecting focus to the input (R9.3).
+  const interactive = (event.target as Element | null)?.closest?.('button, a, [tabindex]')
+  if (interactive && interactive !== inputEl.value) return
   if (event.target !== inputEl.value) {
     event.preventDefault()
     inputEl.value?.focus()
@@ -401,118 +468,154 @@ function highlightParts(option: string): [string, string, string] {
   if (at === -1) return [option, '', '']
   return [option.slice(0, at), option.slice(at, at + q.length), option.slice(at + q.length)]
 }
+
+defineExpose({
+  /** Run the `rules` now and show/clear the message; returns validity (R8.5). */
+  validate: runValidation,
+  /** Move focus to the text input. */
+  focus: () => inputEl.value?.focus(),
+})
 </script>
 
 <template>
-  <div ref="rootEl" class="auto-combo" :class="{ 'auto-combo--disabled': disabled }">
+  <div
+    ref="rootEl"
+    class="auto-combo"
+    :class="{
+      'auto-combo--disabled': disabled,
+      'auto-combo--error': invalid,
+    }"
+  >
     <label v-if="label && !hideLabel" class="ac-label" :for="inputId">{{ label }}</label>
-    <div class="ac-control" @mousedown="onControlMousedown">
-      <template v-if="multiple && chips">
-        <span v-for="value in selectedValues" :key="value" class="ac-chip">
-          <span class="ac-chip__text">{{ value }}</span>
-          <button
-            type="button"
-            class="ac-chip__remove"
-            :aria-label="`Remove ${value}`"
-            :disabled="disabled"
-            @mousedown.stop.prevent
-            @click.stop="removeValue(value)"
-          >
-            &times;
-          </button>
+    <div class="ac-field">
+      <div class="ac-control" @mousedown="onControlMousedown">
+        <span v-if="$slots.prefix" class="ac-prefix">
+          <slot name="prefix" />
         </span>
-      </template>
-      <span v-else-if="multiple && hasSelection" class="ac-summary">
-        {{ selectedValues.join(', ') }}
-      </span>
-      <input
-        :id="inputId"
-        ref="inputEl"
-        class="ac-input"
-        type="text"
-        role="combobox"
-        autocomplete="off"
-        :value="query"
-        :placeholder="shownPlaceholder"
-        :disabled="disabled"
-        :aria-label="inputLabel"
-        :aria-describedby="inputDescriptionIds"
-        :aria-expanded="panelVisible"
-        aria-autocomplete="list"
-        :aria-controls="listboxId"
-        aria-haspopup="listbox"
-        :aria-activedescendant="activeDescendant"
-        @input="onInput"
-        @keydown="onKeydown"
-        @focus="onFocus"
-        @blur="onBlur"
-      />
-      <span
-        v-if="selectedDescription"
-        :id="selectedDescriptionId"
-        class="ac-sr-only"
-      >
-        {{ selectedDescription }}
-      </span>
-      <span
-        :id="statusId"
-        class="ac-sr-only"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        {{ statusText }}
-      </span>
-      <button
-        v-if="clearable && hasSelection && !disabled"
-        type="button"
-        class="ac-clear"
-        aria-label="Clear selection"
-        @mousedown.stop.prevent
-        @click.stop="clearAll"
-      >
-        &times;
-      </button>
-    </div>
-    <ul
-      v-show="panelVisible"
-      :id="listboxId"
-      ref="listEl"
-      class="ac-listbox"
-      role="listbox"
-      :aria-multiselectable="multiple || undefined"
-    >
-      <li
-        v-for="(item, index) in items"
-        :id="`${uid}-opt-${index}`"
-        :key="`${item.kind}:${item.value}`"
-        class="ac-option"
-        :class="{
-          'ac-option--active': index === activeIndex,
-          'ac-option--selected': item.kind === 'option' && isSelected(item.value),
-          'ac-option--create': item.kind === 'create',
-        }"
-        role="option"
-        :aria-selected="item.kind === 'option' && isSelected(item.value)"
-        @mousedown.prevent
-        @click="commitItem(item)"
-        @mousemove="activeIndex = index"
-      >
-        <template v-if="item.kind === 'option'">
-          <span class="ac-option__text">
-            <template v-for="(part, i) in highlightParts(item.value)" :key="i">
-              <mark v-if="i === 1 && part" class="ac-match">{{ part }}</mark>
-              <template v-else>{{ part }}</template>
-            </template>
+        <template v-if="multiple && chips">
+          <span v-for="value in selectedValues" :key="value" class="ac-chip">
+            <span class="ac-chip__text">{{ value }}</span>
+            <button
+              type="button"
+              class="ac-chip__remove"
+              :aria-label="`Remove ${value}`"
+              :disabled="disabled"
+              @mousedown.stop.prevent
+              @click.stop="removeValue(value)"
+            >
+              &times;
+            </button>
           </span>
-          <span v-if="isSelected(item.value)" class="ac-option__check" aria-hidden="true">✓</span>
         </template>
-        <template v-else>
-          <span class="ac-option__text">Add "{{ item.value }}"</span>
-        </template>
-      </li>
-      <li v-if="!items.length && showNoResults" class="ac-empty" role="presentation">{{ noResultsText }}</li>
-    </ul>
+        <span v-else-if="multiple && hasSelection" class="ac-summary">
+          {{ selectedValues.join(', ') }}
+        </span>
+        <input
+          :id="inputId"
+          ref="inputEl"
+          class="ac-input"
+          type="text"
+          role="combobox"
+          autocomplete="off"
+          :value="query"
+          :placeholder="shownPlaceholder"
+          :disabled="disabled"
+          :maxlength="maxlength"
+          :aria-label="inputLabel"
+          :aria-describedby="inputDescriptionIds"
+          :aria-expanded="panelVisible"
+          :aria-invalid="invalid ? 'true' : undefined"
+          aria-autocomplete="list"
+          :aria-controls="listboxId"
+          aria-haspopup="listbox"
+          :aria-activedescendant="activeDescendant"
+          @input="onInput"
+          @keydown="onKeydown"
+          @focus="onFocus"
+          @blur="onBlur"
+        />
+        <span
+          v-if="selectedDescription"
+          :id="selectedDescriptionId"
+          class="ac-sr-only"
+        >
+          {{ selectedDescription }}
+        </span>
+        <span
+          :id="statusId"
+          class="ac-sr-only"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {{ statusText }}
+        </span>
+        <span v-if="loading" class="ac-spinner" aria-hidden="true" />
+        <span v-if="$slots.suffix" class="ac-suffix">
+          <slot name="suffix" />
+        </span>
+        <button
+          v-if="clearable && hasSelection && !disabled"
+          type="button"
+          class="ac-clear"
+          aria-label="Clear selection"
+          @mousedown.stop.prevent
+          @click.stop="clearAll"
+        >
+          &times;
+        </button>
+      </div>
+      <ul
+        v-show="panelVisible"
+        :id="listboxId"
+        ref="listEl"
+        class="ac-listbox"
+        role="listbox"
+        :aria-multiselectable="multiple || undefined"
+      >
+        <li
+          v-for="(item, index) in items"
+          :id="`${uid}-opt-${index}`"
+          :key="`${item.kind}:${item.value}`"
+          class="ac-option"
+          :class="{
+            'ac-option--active': index === activeIndex,
+            'ac-option--selected': item.kind === 'option' && isSelected(item.value),
+            'ac-option--create': item.kind === 'create',
+          }"
+          role="option"
+          :aria-selected="item.kind === 'option' && isSelected(item.value)"
+          @mousedown.prevent
+          @click="commitItem(item)"
+          @mousemove="activeIndex = index"
+        >
+          <template v-if="item.kind === 'option'">
+            <span class="ac-option__text">
+              <template v-for="(part, i) in highlightParts(item.value)" :key="i">
+                <mark v-if="i === 1 && part" class="ac-match">{{ part }}</mark>
+                <template v-else>{{ part }}</template>
+              </template>
+            </span>
+            <span v-if="isSelected(item.value)" class="ac-option__check" aria-hidden="true">✓</span>
+          </template>
+          <template v-else>
+            <span class="ac-option__text">Add "{{ item.value }}"</span>
+          </template>
+        </li>
+        <li v-if="!items.length && showNoResults" class="ac-empty" role="presentation">{{ noResultsText }}</li>
+      </ul>
+    </div>
+    <div v-if="errorText || showCounter" class="ac-footer">
+      <span v-if="errorText" :id="errorId" class="ac-error" role="alert">{{ errorText }}</span>
+      <span
+        v-if="showCounter"
+        class="ac-counter"
+        :class="{ 'ac-counter--limit': atCharLimit }"
+        aria-hidden="true"
+      >
+        {{ counterText }}
+      </span>
+    </div>
   </div>
 </template>
 
@@ -526,6 +629,9 @@ function highlightParts(option: string): [string, string, string] {
   --ac-chip-bg: #eef1ff;
   --ac-chip-text: #35439c;
   --ac-active-bg: #eef1ff;
+  --ac-error: #cf3a3a;
+  --ac-disabled-bg: #f3f4f6;
+  --ac-shadow: 0 8px 24px rgba(15, 20, 40, 0.12);
   --ac-radius: 6px;
   --ac-font: inherit;
 
@@ -542,6 +648,10 @@ function highlightParts(option: string): [string, string, string] {
   margin-bottom: 4px;
   font-size: 0.875rem;
   font-weight: 600;
+}
+
+.ac-field {
+  position: relative;
 }
 
 .ac-control {
@@ -564,8 +674,16 @@ function highlightParts(option: string): [string, string, string] {
   outline-offset: 1px;
 }
 
+.auto-combo--error .ac-control {
+  border-color: var(--ac-error);
+}
+
+.auto-combo--error .ac-control:focus-within {
+  outline-color: color-mix(in srgb, var(--ac-error) 30%, transparent);
+}
+
 .auto-combo--disabled .ac-control {
-  background: #f3f4f6;
+  background: var(--ac-disabled-bg);
   cursor: not-allowed;
 }
 
@@ -594,6 +712,36 @@ function highlightParts(option: string): [string, string, string] {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.ac-prefix,
+.ac-suffix {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--ac-muted);
+}
+
+.ac-spinner {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--ac-border);
+  border-top-color: var(--ac-border-focus);
+  border-radius: 50%;
+  animation: ac-spin 0.7s linear infinite;
+}
+
+@keyframes ac-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ac-spinner {
+    animation-duration: 1.6s;
+  }
 }
 
 .ac-chip {
@@ -657,11 +805,34 @@ function highlightParts(option: string): [string, string, string] {
 .ac-clear:hover,
 .ac-clear:focus-visible {
   color: var(--ac-text);
-  background: #eee;
+  background: color-mix(in srgb, var(--ac-text) 12%, transparent);
 }
 
 .ac-clear:focus-visible {
   outline: 2px solid var(--ac-border-focus);
+}
+
+.ac-footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 0.8125rem;
+}
+
+.ac-error {
+  color: var(--ac-error);
+}
+
+.ac-counter {
+  margin-left: auto;
+  color: var(--ac-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ac-counter--limit {
+  color: var(--ac-error);
 }
 
 .ac-listbox {
@@ -676,7 +847,7 @@ function highlightParts(option: string): [string, string, string] {
   background: var(--ac-bg);
   border: 1px solid var(--ac-border);
   border-radius: var(--ac-radius);
-  box-shadow: 0 8px 24px rgba(15, 20, 40, 0.12);
+  box-shadow: var(--ac-shadow);
   max-height: 260px;
   overflow-y: auto;
 }

@@ -128,11 +128,65 @@ third-party runtime dependencies, and follows the
 - **R7.8** Styling uses plain scoped CSS with CSS custom properties
   (`--ac-*`) as theming hooks; no CSS framework required.
 
-## 8. Library packaging
+## 8. Validation
 
-- **R8.1** The package builds as an ES module + UMD bundle via Vite library
+- **R8.1** A `rules` prop accepts an array of functions
+  `(value) => true | string`. Each rule receives the current model value
+  (`string | null` or `string[]`) and returns `true` when valid or an error
+  message string when not.
+- **R8.2** Rules run whenever the model value changes and whenever the user
+  leaves the field (blur, Tab, click outside). The first failing rule's
+  message is rendered below the control.
+- **R8.3** While a rule fails, the control shows error styling, the input gets
+  `aria-invalid="true"`, and the message element (a `role="alert"` region) is
+  referenced from the input's `aria-describedby`.
+- **R8.4** The component exposes a `validate(): boolean` method
+  (via template ref) so callers can trigger validation imperatively, e.g. on
+  form submit. Every validation run emits a `validation` event with
+  `(valid: boolean, message: string | null)`.
+- **R8.5** Validation is client-side only: there are no props for displaying
+  externally supplied (e.g. server-side) errors. (Intentionally out of scope
+  for now.)
+
+## 9. Prefix / suffix slots
+
+- **R9.1** A `prefix` slot renders custom content (icons, icon buttons, …) at
+  the front of the control, before chips and the input. A matching `suffix`
+  slot renders after the input, before the clear button.
+- **R9.2** Non-interactive slot content behaves like the rest of the control:
+  clicking it focuses the input (and opens the dropdown per `openOnFocus`).
+- **R9.3** Interactive slot content (buttons, links, focusable elements) keeps
+  its native behavior — clicking it does not steal focus into the input — and
+  moving focus to it does not close the dropdown or reconcile the text (it
+  counts as staying inside the component).
+
+## 10. Loading state
+
+- **R10.1** `loading: true` shows an animated spinner inside the control
+  (before the suffix/clear button). The spinner is `aria-hidden` and respects
+  `prefers-reduced-motion` by slowing the animation.
+- **R10.2** The spinner is purely presentational: `loading` does not change
+  filtering, the dropdown contents, the empty state, or the screen-reader
+  announcements. (Async/remote-search integration is intentionally out of
+  scope for now.)
+
+## 11. Character counter
+
+- **R11.1** `showCounter: true` renders a character counter for the search
+  text below the control. With `maxlength` set it reads `<n> / <max>`;
+  without, it shows just the current length.
+- **R11.2** The `maxlength` prop is forwarded to the native input, so the
+  browser enforces the limit while typing.
+- **R11.3** When the query length reaches `maxlength`, the counter switches to
+  the error color as a visual cue. The counter is presentational
+  (`aria-hidden`); assistive technology already gets the native `maxlength`
+  semantics.
+
+## 12. Library packaging
+
+- **R12.1** The package builds as an ES module + UMD bundle via Vite library
   mode, with `vue` as an external peer dependency.
-- **R8.2** TypeScript declarations are emitted; all props/events are typed.
-- **R8.3** The only runtime dependency is Vue itself.
-- **R8.4** Named export `AutoCombo` from the package root; styles importable
+- **R12.2** TypeScript declarations are emitted; all props/events are typed.
+- **R12.3** The only runtime dependency is Vue itself.
+- **R12.4** Named export `AutoCombo` from the package root; styles importable
   as `vue-auto-combo/style.css`.

@@ -9,7 +9,7 @@ const FRUITS = ['Apple', 'Apricot', 'Banana', 'Blueberry', 'Cherry', 'Grape']
  * Mounts AutoCombo with v-model wired up, so `update:modelValue` emissions
  * flow back into the `modelValue` prop like they would in a real app.
  */
-function mountCombo(props: Record<string, unknown> = {}) {
+function mountCombo(props: Record<string, unknown> = {}, slots: Record<string, string> = {}) {
   const wrapper = mount(AutoCombo, {
     props: {
       options: FRUITS,
@@ -18,6 +18,7 @@ function mountCombo(props: Record<string, unknown> = {}) {
         await wrapper.setProps({ modelValue: value })
       },
     },
+    slots,
     attachTo: document.body,
   })
   return wrapper
@@ -565,6 +566,211 @@ describe('7. general API and states', () => {
     expect(input(wrapper).element.value).toBe('Apple')
     await wrapper.setProps({ modelValue: 'Cherry' })
     expect(input(wrapper).element.value).toBe('Cherry')
+    wrapper.unmount()
+  })
+})
+
+describe('8. validation', () => {
+  const required = (value: string | string[] | null) =>
+    (Array.isArray(value) ? value.length > 0 : !!value) || 'Required'
+
+  it('R8.2 runs rules on blur and shows the failing message with error styling', async () => {
+    const wrapper = mountCombo({ rules: [required] })
+    expect(wrapper.find('.ac-error').exists()).toBe(false)
+    expect(input(wrapper).attributes('aria-invalid')).toBeUndefined()
+
+    await input(wrapper).trigger('focus')
+    await input(wrapper).trigger('blur')
+    const error = wrapper.find('.ac-error')
+    expect(error.text()).toBe('Required')
+    expect(error.attributes('role')).toBe('alert')
+    expect(wrapper.classes()).toContain('auto-combo--error')
+    expect(input(wrapper).attributes('aria-invalid')).toBe('true')
+    wrapper.unmount()
+  })
+
+  it('R8.3 wires the error message into aria-describedby', async () => {
+    const wrapper = mountCombo({ rules: [required] })
+    await input(wrapper).trigger('focus')
+    await input(wrapper).trigger('blur')
+    const error = wrapper.find('.ac-error')
+    expect(input(wrapper).attributes('aria-describedby')?.split(' ')).toContain(
+      error.attributes('id'),
+    )
+    wrapper.unmount()
+  })
+
+  it('R8.2 revalidates on model change and clears the message once valid', async () => {
+    const wrapper = mountCombo({ rules: [required] })
+    await input(wrapper).trigger('focus')
+    await input(wrapper).trigger('blur')
+    expect(wrapper.find('.ac-error').text()).toBe('Required')
+
+    await input(wrapper).trigger('focus')
+    await type(wrapper, 'ban')
+    await wrapper.find('.ac-option').trigger('click')
+    expect(wrapper.props('modelValue')).toBe('Banana')
+    expect(wrapper.find('.ac-error').exists()).toBe(false)
+    expect(input(wrapper).attributes('aria-invalid')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('R8.1 shows the first failing rule when several are given', async () => {
+    const wrapper = mountCombo({
+      multiple: true,
+      modelValue: ['Apple'],
+      rules: [
+        (v: string[] | null) => (v?.length ?? 0) > 0 || 'Required',
+        (v: string[] | null) => (v?.length ?? 0) >= 2 || 'Pick at least 2',
+        () => 'Never reached because rules stop at the first failure',
+      ],
+    })
+    await type(wrapper, 'cher')
+    await wrapper.find('.ac-option').trigger('click')
+    // ['Apple', 'Cherry'] passes the first two rules; third still fails.
+    expect(wrapper.find('.ac-error').text()).toBe(
+      'Never reached because rules stop at the first failure',
+    )
+
+    await wrapper.find('.ac-clear').trigger('click')
+    expect(wrapper.find('.ac-error').text()).toBe('Required')
+    wrapper.unmount()
+  })
+
+  it('R8.4 exposes validate() and emits a validation event on every run', async () => {
+    const wrapper = mountCombo({ rules: [required] })
+    const vm = wrapper.vm as unknown as { validate: () => boolean }
+    expect(vm.validate()).toBe(false)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.ac-error').text()).toBe('Required')
+    expect(wrapper.emitted('validation')?.at(-1)).toEqual([false, 'Required'])
+
+    await type(wrapper, 'ban')
+    await wrapper.find('.ac-option').trigger('click')
+    expect(vm.validate()).toBe(true)
+    expect(wrapper.emitted('validation')?.at(-1)).toEqual([true, null])
+    wrapper.unmount()
+  })
+})
+
+describe('9. prefix / suffix slots', () => {
+  it('R9.1 renders prefix content at the front of the control and suffix after the input', () => {
+    const wrapper = mountCombo(
+      { multiple: true, modelValue: ['Apple'] },
+      {
+        prefix: '<svg data-testid="search-icon" />',
+        suffix: '<span data-testid="hint">?</span>',
+      },
+    )
+    const control = wrapper.find('.ac-control')
+    expect(control.find('.ac-prefix [data-testid="search-icon"]').exists()).toBe(true)
+    expect(control.find('.ac-suffix [data-testid="hint"]').exists()).toBe(true)
+    // Prefix comes before the chips/input; suffix after the input.
+    expect(control.element.firstElementChild?.classList.contains('ac-prefix')).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('R9.2 clicking non-interactive prefix content focuses the input and opens the dropdown', async () => {
+    const wrapper = mountCombo({}, { prefix: '<span data-testid="icon">*</span>' })
+    await wrapper.find('[data-testid="icon"]').trigger('mousedown')
+    expect(document.activeElement).toBe(input(wrapper).element)
+    expect(wrapper.find('[role="listbox"]').isVisible()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('R9.3 an icon button in the prefix slot keeps its native behavior', async () => {
+    const wrapper = mountCombo(
+      {},
+      { prefix: '<button type="button" data-testid="icon-btn">@</button>' },
+    )
+    await wrapper.find('[data-testid="icon-btn"]').trigger('mousedown')
+    // Focus is not redirected into the input and the dropdown is not forced open.
+    expect(document.activeElement).not.toBe(input(wrapper).element)
+    expect(wrapper.find('[role="listbox"]').isVisible()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('R9.3 moving focus to a slot button does not close the dropdown or wipe the text', async () => {
+    const wrapper = mountCombo(
+      {},
+      { suffix: '<button type="button" data-testid="icon-btn">@</button>' },
+    )
+    await type(wrapper, 'ap')
+    expect(wrapper.find('[role="listbox"]').isVisible()).toBe(true)
+
+    const button = wrapper.find('[data-testid="icon-btn"]').element as HTMLButtonElement
+    await input(wrapper).trigger('blur', { relatedTarget: button })
+    expect(wrapper.find('[role="listbox"]').isVisible()).toBe(true)
+    expect(input(wrapper).element.value).toBe('ap')
+    wrapper.unmount()
+  })
+})
+
+describe('10. loading state', () => {
+  it('R10.1 shows an aria-hidden spinner in the control while loading', async () => {
+    const wrapper = mountCombo({ loading: true })
+    const spinner = wrapper.find('.ac-control .ac-spinner')
+    expect(spinner.exists()).toBe(true)
+    expect(spinner.attributes('aria-hidden')).toBe('true')
+
+    await wrapper.setProps({ loading: false })
+    expect(wrapper.find('.ac-control .ac-spinner').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('R10.2 loading is purely visual: filtering, empty state, and announcements are unchanged', async () => {
+    const wrapper = mountCombo({ loading: true })
+    await type(wrapper, 'ap')
+    expect(optionTexts(wrapper)).toEqual(['Apple', 'Apricot', 'Grape'])
+    expect(wrapper.find('[role="status"]').text()).toBe('3 suggestions available.')
+
+    await type(wrapper, 'zzz')
+    expect(wrapper.find('.ac-empty').text()).toBe('No matching options')
+    expect(wrapper.find('[role="listbox"]').attributes('aria-busy')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('R10.2 with showNoResults=false the panel still hides while loading and nothing matches', async () => {
+    const wrapper = mountCombo({ loading: true, showNoResults: false })
+    await type(wrapper, 'zzz')
+    expect(wrapper.find('[role="listbox"]').isVisible()).toBe(false)
+    expect(input(wrapper).attributes('aria-expanded')).toBe('false')
+    wrapper.unmount()
+  })
+})
+
+describe('11. character counter', () => {
+  it('R11.1 is hidden by default and shows the query length when enabled', async () => {
+    const hidden = mountCombo()
+    await type(hidden, 'ap')
+    expect(hidden.find('.ac-counter').exists()).toBe(false)
+    hidden.unmount()
+
+    const wrapper = mountCombo({ showCounter: true })
+    expect(wrapper.find('.ac-counter').text()).toBe('0')
+    await type(wrapper, 'ap')
+    expect(wrapper.find('.ac-counter').text()).toBe('2')
+    wrapper.unmount()
+  })
+
+  it('R11.1/R11.2 shows <n> / <max> and forwards maxlength to the input', async () => {
+    const wrapper = mountCombo({ showCounter: true, maxlength: 10 })
+    expect(input(wrapper).attributes('maxlength')).toBe('10')
+    await type(wrapper, 'apple')
+    expect(wrapper.find('.ac-counter').text()).toBe('5 / 10')
+    wrapper.unmount()
+  })
+
+  it('R11.3 marks the counter when the limit is reached and stays presentational', async () => {
+    const wrapper = mountCombo({ showCounter: true, maxlength: 5 })
+    await type(wrapper, 'appl')
+    expect(wrapper.find('.ac-counter').classes()).not.toContain('ac-counter--limit')
+
+    await type(wrapper, 'apple')
+    const counter = wrapper.find('.ac-counter')
+    expect(counter.text()).toBe('5 / 5')
+    expect(counter.classes()).toContain('ac-counter--limit')
+    expect(counter.attributes('aria-hidden')).toBe('true')
     wrapper.unmount()
   })
 })
