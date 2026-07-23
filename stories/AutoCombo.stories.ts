@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import { ref, watch } from 'vue'
 import AutoCombo from '../src/AutoCombo.vue'
 import type { AutoComboValue } from '../src/AutoCombo.vue'
+import './theming.css'
 
 /** Number of selected values regardless of single/multi mode. */
 const selectionCount = (value: AutoComboValue) =>
@@ -272,4 +273,45 @@ export const CharacterCounter: Story = {
     maxlength: 20,
     placeholder: 'Max 20 characters…',
   },
+}
+
+// --- Styling (see stories/Styling.mdx for the full class/variable reference) ---
+
+export const ThemingDark: Story = {
+  name: 'Theming (CSS custom properties)',
+  render: bound(['Kiwi']),
+  args: {
+    multiple: true,
+    chips: true,
+    label: 'Fruit (dark theme)',
+  },
+  decorators: [
+    (story) => ({
+      components: { story },
+      template: `
+        <div class="theming-demo--dark">
+          <story />
+        </div>
+      `,
+    }),
+  ],
+}
+
+export const ThemingCompactPill: Story = {
+  name: 'Theming (compact + pill radius)',
+  render: bound(null),
+  args: {
+    label: 'Fruit (pill style)',
+    placeholder: 'Search fruit…',
+  },
+  decorators: [
+    (story) => ({
+      components: { story },
+      template: `
+        <div class="theming-demo--compact-pill">
+          <story />
+        </div>
+      `,
+    }),
+  ],
 }

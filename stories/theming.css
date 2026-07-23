@@ -1,0 +1,41 @@
+/* Example themes for the "Theming with CSS custom properties" docs section
+   and stories. Demonstrates overriding AutoCombo's --ac-* custom properties
+   from a plain, non-scoped stylesheet — no inline styles involved. */
+
+.theming-demo--dark {
+  padding: 1.5rem;
+  background: #1b1e27;
+  border-radius: 8px;
+}
+
+.theming-demo--dark .auto-combo {
+  --ac-border: #3a3f4f;
+  --ac-border-focus: #8ea2ff;
+  --ac-bg: #262a36;
+  --ac-text: #e7e9f0;
+  --ac-muted: #9096a8;
+  --ac-chip-bg: #333a52;
+  --ac-chip-text: #c3cbff;
+  --ac-active-bg: #333a52;
+  --ac-error: #ff8080;
+  --ac-disabled-bg: #20232c;
+  --ac-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --ac-radius: 10px;
+}
+
+.theming-demo--compact-pill {
+  font-size: 0.875rem;
+}
+
+.theming-demo--compact-pill .auto-combo {
+  --ac-radius: 14px;
+  --ac-border-focus: #10b981;
+}
+
+/* --ac-radius shapes both the control and the dropdown (see
+   src/AutoCombo.vue), so a true pill needs its own class override —
+   cranking --ac-radius to a pill value would oval out the dropdown too. */
+.theming-demo--compact-pill .ac-control {
+  border-radius: 999px;
+  padding-left: 14px;
+}

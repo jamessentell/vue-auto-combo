@@ -119,6 +119,119 @@ Or register globally: `app.use(VueAutoCombo)` (default export).
 | `validate(): boolean` | Run `rules` now (e.g. on form submit); shows/clears the message and returns validity |
 | `focus(): void` | Focus the text input |
 
+## Styling
+
+The component ships usable default styles in `dist/vue-auto-combo.css` (import
+it once: `import 'vue-auto-combo/style.css'`). Customize the look by targeting
+its classes from your own stylesheet.
+
+The component's own `<style>` block is `scoped`, but scoping only affects
+selectors written *inside that block* — the class names are plain and stable,
+so a normal (non-scoped) stylesheet loaded after the component's CSS can
+target them directly.
+
+### Theming with CSS custom properties
+
+The fastest way to reskin the component is to reassign its `--ac-*` custom
+properties on the `.auto-combo` class (or on a wrapper class around it).
+Custom properties inherit through the DOM, so setting them anywhere above
+the component in the tree works too.
+
+| Property | Default | Used for |
+| --- | --- | --- |
+| `--ac-border` | `#c8ccd4` | Control and dropdown border |
+| `--ac-border-focus` | `#4f6df5` | Focus ring/border, active option check, match underline |
+| `--ac-bg` | `#fff` | Control and dropdown background |
+| `--ac-text` | `#1f2430` | Primary text color |
+| `--ac-muted` | `#7a8194` | Placeholder, icons, counter text |
+| `--ac-chip-bg` | `#eef1ff` | Multi-select chip background |
+| `--ac-chip-text` | `#35439c` | Chip text, create-option row, selected-check color |
+| `--ac-active-bg` | `#eef1ff` | Highlighted/hovered option background |
+| `--ac-error` | `#cf3a3a` | Error border, error text, counter-at-limit text |
+| `--ac-disabled-bg` | `#f3f4f6` | Control background when `disabled` |
+| `--ac-shadow` | `0 8px 24px rgba(15, 20, 40, 0.12)` | Dropdown panel shadow |
+| `--ac-radius` | `6px` | Control and dropdown corner radius |
+| `--ac-font` | `inherit` | Font shorthand for the whole component |
+
+```css
+/* Theme every instance from a global stylesheet */
+.auto-combo {
+  --ac-bg: #262a36;
+  --ac-text: #e7e9f0;
+  --ac-border: #3a3f4f;
+  --ac-border-focus: #8ea2ff;
+  --ac-chip-bg: #333a52;
+  --ac-chip-text: #c3cbff;
+}
+
+/* Or scope a theme to a subset of instances with an extra class */
+.theme-dark.auto-combo {
+  --ac-bg: #262a36;
+  --ac-text: #e7e9f0;
+}
+```
+
+```vue
+<template>
+  <AutoCombo v-model="fruit" :options="fruits" class="theme-dark" />
+</template>
+```
+
+> `--ac-radius` shapes both the control **and** the dropdown panel, so
+> cranking it up to a pill value (e.g. `999px`) ovals out the dropdown along
+> with the input. For a true pill input, keep `--ac-radius` at a normal value
+> and round just the control with a class override (see below) instead.
+
+### Class reference
+
+For changes the custom properties don't cover — padding, shape, borders on
+individual parts — target the classes directly.
+
+| Class | Element | Notes |
+| --- | --- | --- |
+| `.auto-combo` | Root wrapper | Add `--ac-*` overrides here |
+| `.auto-combo--disabled` | Root wrapper | Present when `disabled` |
+| `.auto-combo--error` | Root wrapper | Present when a validation rule fails |
+| `.ac-label` | `<label>` | Visible label (`label` prop, `hideLabel` unset) |
+| `.ac-field` | Wrapper around control + dropdown | Positioning context for the dropdown |
+| `.ac-control` | The bordered box | Contains prefix, chips/summary, input, spinner, suffix, clear button |
+| `.ac-prefix` / `.ac-suffix` | Slot wrappers | Wrap the `prefix`/`suffix` slot content |
+| `.ac-chip` | One selected value (multi-select + `chips`) | |
+| `.ac-chip__text` | Chip label text | |
+| `.ac-chip__remove` | Chip's `&times;` remove button | |
+| `.ac-summary` | Comma-joined value text | Multi-select with `chips: false` |
+| `.ac-input` | The `<input>` element | |
+| `.ac-spinner` | Loading spinner | Present when `loading` |
+| `.ac-clear` | Clear-all `&times;` button | Present when `clearable` and a value is selected |
+| `.ac-footer` | Row under the control | Holds the error message and/or counter |
+| `.ac-error` | Error message text | |
+| `.ac-counter` | Character counter text | |
+| `.ac-counter--limit` | Counter | Present at `maxlength` |
+| `.ac-listbox` | Dropdown `<ul>` | |
+| `.ac-option` | One `<li>` row | |
+| `.ac-option--active` | Option | Keyboard/mouse-highlighted row |
+| `.ac-option--selected` | Option | Already-selected value |
+| `.ac-option--create` | Option | The `Add "…"` free-text row |
+| `.ac-option__text` | Option label span | Wraps the highlighted match |
+| `.ac-option__check` | Selected-option checkmark | |
+| `.ac-match` | Matched substring within an option | Wrapped in `<mark>` |
+| `.ac-empty` | No-results row | Shown when `showNoResults` and nothing matches |
+
+```css
+/* Example: square corners on chips, bolder active-option highlight */
+.auto-combo .ac-chip {
+  border-radius: 4px;
+}
+
+.auto-combo .ac-option--active {
+  background: var(--ac-chip-text);
+  color: #fff;
+}
+```
+
+See the **Styling** page in [Storybook](https://jamessentell.github.io/vue-auto-combo/)
+for live, editable examples of both approaches.
+
 ## Development
 
 ```bash
