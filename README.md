@@ -124,6 +124,7 @@ Or register globally: `app.use(VueAutoCombo)` (default export).
 | `loading` | `boolean` | `false` | Show a spinner in the control (purely visual) |
 | `showCounter` | `boolean` | `false` | Show a character counter for the search text |
 | `maxlength` | `number` | — | Max search-text length (native enforcement + counter) |
+| `appendTo` | `'body' \| 'self' \| string \| HTMLElement` | `'body'` | Where to render the dropdown. `'body'` teleports it out so it escapes ancestor `overflow`/stacking (e.g. a modal); a selector/element teleports there; `'self'` renders it in place |
 
 ### Events
 
@@ -177,6 +178,12 @@ the component in the tree works too.
 | `--ac-shadow` | `0 8px 24px rgba(15, 20, 40, 0.12)` | Dropdown panel shadow |
 | `--ac-radius` | `6px` | Control and dropdown corner radius |
 | `--ac-font` | `inherit` | Font shorthand for the whole component |
+| `--ac-listbox-max-height` | `260px` | Design cap on dropdown height (the panel also shrinks to fit available space) |
+| `--ac-listbox-z` | `9999` | z-index of the teleported dropdown (with `appendTo: 'body'`) |
+
+Set these on the component (`.auto-combo`) as usual — when the dropdown teleports
+to `<body>`, its resolved `--ac-*` theme is forwarded onto the panel so it stays
+styled outside the component tree.
 
 ```css
 /* Theme every instance from a global stylesheet */

@@ -29,12 +29,20 @@ third-party runtime dependencies, and follows the
   (`aria-selected="true"` plus a visual indicator). In multi-select mode,
   clicking a selected option deselects it (toggle).
 - **R1.10** The dropdown opens below the control by default, but flips to open
-  above it when the list does not fit in the space below and there is more room
-  above. "Space below" is measured against the nearest overflow-clipping
-  ancestor (a modal body or scroll pane), clamped to the viewport — so a field
-  near the bottom of a modal opens upward instead of being clipped off, without
-  relying on `z-index`. Placement is computed when the dropdown opens and kept
-  current while it is open as the window or an ancestor scrolls or resizes.
+  above it when the list does not fit below and there is more room above.
+  Whichever side it takes, the panel is **sized to the available space** (its
+  `max-height` is capped to what fits, exposed as the `--ac-available-height`
+  custom property) so it scrolls internally instead of overflowing. Placement
+  and size are computed when the dropdown opens and kept current while open as
+  the window/visual viewport or an ancestor scrolls or resizes.
+- **R1.11** By default the dropdown is teleported to `<body>` and positioned to
+  track the control (`appendTo: 'body'`), so it escapes ancestor `overflow`
+  clipping and stacking contexts (e.g. a field near the bottom of a modal) and
+  floats above the page via a high `z-index` (themeable with `--ac-listbox-z`);
+  its available height is then bounded by the viewport. `appendTo` also accepts
+  a CSS selector or element to teleport elsewhere, or `'self'` to render the
+  panel in place (bounded by the nearest scroll/overflow ancestor). Outside-click
+  and focus handling account for the teleported panel so selection still works.
 
 ## 2. Selection modes
 

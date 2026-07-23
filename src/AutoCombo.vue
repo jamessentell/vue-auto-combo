@@ -43,6 +43,13 @@ export interface AutoComboProps {
   showCounter?: boolean
   /** Maximum search-text length, enforced on the input and reflected by the counter. */
   maxlength?: number
+  /**
+   * Where to render the dropdown. `'body'` (default) teleports it to
+   * `<body>` so it escapes ancestor `overflow` clipping and stacking contexts
+   * (e.g. inside a modal); a CSS selector or element teleports there instead;
+   * `'self'` renders it in place, positioned relative to the control.
+   */
+  appendTo?: 'body' | 'self' | string | HTMLElement
 }
 
 const props = withDefaults(defineProps<AutoComboProps>(), {
@@ -66,6 +73,7 @@ const props = withDefaults(defineProps<AutoComboProps>(), {
   loading: false,
   showCounter: false,
   maxlength: undefined,
+  appendTo: 'body',
 })
 
 const emit = defineEmits<{
@@ -95,6 +103,16 @@ const query = ref('')
 const isOpen = ref(false)
 const activeIndex = ref(-1)
 const placement = ref<'bottom' | 'top'>('bottom')
+const panelStyle = ref<Record<string, string>>({})
+const themeVars = ref<Record<string, string>>({})
+const maxHeightCap = ref(260)
+const mounted = ref(false)
+
+const appendToSelf = computed(() => props.appendTo === 'self')
+// Teleport stays disabled (in place) until mounted so SSR/hydration render the
+// panel in the component tree; it moves to the target on the client.
+const teleportDisabled = computed(() => appendToSelf.value || !mounted.value)
+const teleportTo = computed(() => (appendToSelf.value ? 'body' : props.appendTo))
 
 function uniqueValues(values: string[]) {
   return [...new Set(values)]
@@ -253,41 +271,107 @@ function isSelected(value: string) {
   return selectedValues.value.includes(value)
 }
 
-/**
- * Bounds (in viewport coordinates) the dropdown must stay visible within: the
- * nearest overflow-clipping ancestor (a modal body, scroll pane, …), clamped
- * to the viewport. Falls back to the viewport when nothing above the control
- * clips overflow.
- */
-function clipBounds(): { top: number; bottom: number } {
-  const viewportBottom = window.innerHeight || document.documentElement.clientHeight
-  let node = controlEl.value?.parentElement ?? null
-  while (node && node !== document.body && node !== document.documentElement) {
-    const style = getComputedStyle(node)
-    if (/(auto|scroll|hidden|clip)/.test(style.overflowY + style.overflow)) {
-      const rect = node.getBoundingClientRect()
-      return { top: Math.max(rect.top, 0), bottom: Math.min(rect.bottom, viewportBottom) }
-    }
-    node = node.parentElement
+const PANEL_GAP = 4 // px between control and panel
+const VIEWPORT_MARGIN = 8 // px the panel keeps clear of its boundary
+
+// The panel's `--ac-*` theme comes from the component root. When teleported it
+// leaves that subtree, so these are forwarded onto it (see `readThemeVars`).
+const THEME_VARS = [
+  '--ac-bg', '--ac-border', '--ac-border-focus', '--ac-text', '--ac-muted',
+  '--ac-chip-bg', '--ac-chip-text', '--ac-active-bg', '--ac-error',
+  '--ac-radius', '--ac-shadow', '--ac-font', '--ac-listbox-max-height', '--ac-listbox-z',
+]
+
+/** Snapshot the resolved theme so a teleported panel styles like the control. */
+function readThemeVars(): Record<string, string> {
+  const root = rootEl.value
+  if (!root) return {}
+  const cs = getComputedStyle(root)
+  const out: Record<string, string> = {}
+  for (const name of THEME_VARS) {
+    const value = cs.getPropertyValue(name)
+    if (value) out[name] = value
   }
-  return { top: 0, bottom: viewportBottom }
+  // The root applies `color: var(--ac-text)` and the font; the teleported panel
+  // is outside it and can't inherit them, so pass the resolved values along.
+  if (cs.color) out.color = cs.color
+  if (cs.fontFamily) out.fontFamily = cs.fontFamily
+  if (cs.fontSize) out.fontSize = cs.fontSize
+  return out
+}
+
+/** The design `max-height` cap in px (`--ac-listbox-max-height`, default 260). */
+function readMaxHeightCap(): number {
+  const root = rootEl.value
+  const raw = root ? getComputedStyle(root).getPropertyValue('--ac-listbox-max-height').trim() : ''
+  const n = parseFloat(raw)
+  return Number.isFinite(n) ? n : 260
 }
 
 /**
- * Flip the panel above the control when the list can't fit in the space below
- * (e.g. the control sits near the bottom of a modal) and there is more room
- * above; otherwise keep it below. Default is always below (R1.10).
+ * The rectangle (viewport coordinates) the panel must stay inside. When
+ * teleported it has escaped ancestor `overflow`, so only the viewport bounds
+ * it; rendered in place, the nearest overflow-clipping ancestor (a modal body
+ * or scroll pane) bounds it instead. Inset by `VIEWPORT_MARGIN`.
+ */
+function panelBounds(control: HTMLElement): { top: number; bottom: number } {
+  const viewportBottom = window.innerHeight || document.documentElement.clientHeight
+  let top = 0
+  let bottom = viewportBottom
+  if (teleportDisabled.value) {
+    let node = control.parentElement
+    while (node && node !== document.body && node !== document.documentElement) {
+      const s = getComputedStyle(node)
+      if (/(auto|scroll|hidden|clip)/.test(s.overflow + s.overflowY + s.overflowX)) {
+        const rect = node.getBoundingClientRect()
+        top = Math.max(top, rect.top)
+        bottom = Math.min(bottom, rect.bottom)
+        break
+      }
+      node = node.parentElement
+    }
+  }
+  return { top: top + VIEWPORT_MARGIN, bottom: bottom - VIEWPORT_MARGIN }
+}
+
+/**
+ * Position the panel the way mature combobox libraries do (PrimeVue, Reka UI,
+ * Vuetify): flip above the control when the list can't fit below and there is
+ * more room above, then *size it to the available space* — exposed as
+ * `--ac-available-height` — so it scrolls internally instead of overflowing.
+ * When teleported, also pin it to the control in page coordinates (R1.10).
  */
 function updatePlacement() {
   const control = controlEl.value
   const list = listEl.value
   if (!control || !list) return
-  const controlRect = control.getBoundingClientRect()
-  const bounds = clipBounds()
-  const listHeight = list.offsetHeight
-  const spaceBelow = bounds.bottom - controlRect.bottom
-  const spaceAbove = controlRect.top - bounds.top
-  placement.value = listHeight > spaceBelow && spaceAbove > spaceBelow ? 'top' : 'bottom'
+  const rect = control.getBoundingClientRect()
+  const bounds = panelBounds(control)
+  const natural = list.scrollHeight // intrinsic content height, ignoring clamps
+  // The panel never grows past its design cap, so flip against the *capped*
+  // height: don't flip up when the (capped) panel already fits below.
+  const wanted = Math.min(natural, maxHeightCap.value)
+  const spaceBelow = bounds.bottom - rect.bottom - PANEL_GAP
+  const spaceAbove = rect.top - bounds.top - PANEL_GAP
+  const flip = wanted > spaceBelow && spaceAbove > spaceBelow
+  placement.value = flip ? 'top' : 'bottom'
+  const available = Math.max(0, flip ? spaceAbove : spaceBelow)
+
+  const style: Record<string, string> = { '--ac-available-height': `${available}px` }
+  if (!teleportDisabled.value) {
+    // Teleported: forward the theme, then pin to the control in page
+    // coordinates so it tracks the control as the page scrolls.
+    Object.assign(style, themeVars.value)
+    const height = Math.min(wanted, available) // actual rendered panel height
+    const top = flip ? rect.top - height - PANEL_GAP : rect.bottom + PANEL_GAP
+    style.position = 'absolute'
+    style.top = `${top + window.scrollY}px`
+    style.left = `${rect.left + window.scrollX}px`
+    style.right = 'auto'
+    style.width = `${rect.width}px`
+    style.margin = '0'
+  }
+  panelStyle.value = style
 }
 
 function open() {
@@ -295,6 +379,9 @@ function open() {
   isOpen.value = true
   activeIndex.value = items.value.length ? 0 : -1
   emit('open')
+  // Snapshot the theme cap / vars once per open (they don't change on scroll).
+  maxHeightCap.value = readMaxHeightCap()
+  themeVars.value = teleportDisabled.value ? {} : readThemeVars()
   // Decide below-vs-above once the panel is in the DOM and measurable (R1.10).
   nextTick(updatePlacement)
 }
@@ -470,9 +557,14 @@ function onFocus() {
   if (props.openOnFocus) open()
 }
 
+/** True when a node lives in the control or the (possibly teleported) panel. */
+function containsNode(node: Node | null): boolean {
+  if (!node) return false
+  return !!rootEl.value?.contains(node) || !!listEl.value?.contains(node)
+}
+
 function onBlur(event: FocusEvent) {
-  const next = event.relatedTarget as Node | null
-  if (next && rootEl.value?.contains(next)) return
+  if (containsNode(event.relatedTarget as Node | null)) return
   closeAndReconcile()
 }
 
@@ -490,25 +582,31 @@ function onControlMousedown(event: MouseEvent) {
 }
 
 function onDocumentMousedown(event: MouseEvent) {
-  if (!rootEl.value?.contains(event.target as Node)) closeAndReconcile()
+  // The panel may be teleported out of the root, so check it explicitly.
+  if (!containsNode(event.target as Node)) closeAndReconcile()
 }
 
-// While the panel is open, keep its placement correct as the page or an
-// ancestor (a modal body) scrolls, or the window resizes. Capture-phase catches
-// scrolls on any ancestor, not just the window (R1.10).
+// While the panel is open, keep its placement/size correct as the page or an
+// ancestor (a modal body) scrolls, or the viewport resizes. Capture-phase
+// catches scrolls on any ancestor, not just the window (R1.10).
 function onViewportChange() {
   if (isOpen.value) updatePlacement()
 }
 
 onMounted(() => {
+  mounted.value = true
   document.addEventListener('mousedown', onDocumentMousedown)
   window.addEventListener('scroll', onViewportChange, true)
   window.addEventListener('resize', onViewportChange)
+  window.visualViewport?.addEventListener('resize', onViewportChange)
+  window.visualViewport?.addEventListener('scroll', onViewportChange)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', onDocumentMousedown)
   window.removeEventListener('scroll', onViewportChange, true)
   window.removeEventListener('resize', onViewportChange)
+  window.visualViewport?.removeEventListener('resize', onViewportChange)
+  window.visualViewport?.removeEventListener('scroll', onViewportChange)
 })
 
 watch(() => props.disabled, (disabled) => {
@@ -625,46 +723,52 @@ defineExpose({
           &times;
         </button>
       </div>
-      <ul
-        v-show="panelVisible"
-        :id="listboxId"
-        ref="listEl"
-        class="ac-listbox"
-        :class="{ 'ac-listbox--top': placement === 'top' }"
-        role="listbox"
-        :aria-multiselectable="multiple || undefined"
-      >
-        <li
-          v-for="(item, index) in items"
-          :id="`${uid}-opt-${index}`"
-          :key="`${item.kind}:${item.value}`"
-          class="ac-option"
+      <Teleport :to="teleportTo" :disabled="teleportDisabled">
+        <ul
+          v-show="panelVisible"
+          :id="listboxId"
+          ref="listEl"
+          class="ac-listbox"
           :class="{
-            'ac-option--active': index === activeIndex,
-            'ac-option--selected': item.kind === 'option' && isSelected(item.value),
-            'ac-option--create': item.kind === 'create',
+            'ac-listbox--top': placement === 'top' && teleportDisabled,
+            'ac-listbox--floating': !teleportDisabled,
           }"
-          role="option"
-          :aria-selected="item.kind === 'option' && isSelected(item.value)"
-          @mousedown.prevent
-          @click="commitItem(item)"
-          @mousemove="activeIndex = index"
+          :style="panelStyle"
+          role="listbox"
+          :aria-multiselectable="multiple || undefined"
         >
-          <template v-if="item.kind === 'option'">
-            <span class="ac-option__text">
-              <template v-for="(part, i) in highlightParts(item.value)" :key="i">
-                <mark v-if="i === 1 && part" class="ac-match">{{ part }}</mark>
-                <template v-else>{{ part }}</template>
-              </template>
-            </span>
-            <span v-if="isSelected(item.value)" class="ac-option__check" aria-hidden="true">✓</span>
-          </template>
-          <template v-else>
-            <span class="ac-option__text">Add "{{ item.value }}"</span>
-          </template>
-        </li>
-        <li v-if="!items.length && showNoResults" class="ac-empty" role="presentation">{{ noResultsText }}</li>
-      </ul>
+          <li
+            v-for="(item, index) in items"
+            :id="`${uid}-opt-${index}`"
+            :key="`${item.kind}:${item.value}`"
+            class="ac-option"
+            :class="{
+              'ac-option--active': index === activeIndex,
+              'ac-option--selected': item.kind === 'option' && isSelected(item.value),
+              'ac-option--create': item.kind === 'create',
+            }"
+            role="option"
+            :aria-selected="item.kind === 'option' && isSelected(item.value)"
+            @mousedown.prevent
+            @click="commitItem(item)"
+            @mousemove="activeIndex = index"
+          >
+            <template v-if="item.kind === 'option'">
+              <span class="ac-option__text">
+                <template v-for="(part, i) in highlightParts(item.value)" :key="i">
+                  <mark v-if="i === 1 && part" class="ac-match">{{ part }}</mark>
+                  <template v-else>{{ part }}</template>
+                </template>
+              </span>
+              <span v-if="isSelected(item.value)" class="ac-option__check" aria-hidden="true">✓</span>
+            </template>
+            <template v-else>
+              <span class="ac-option__text">Add "{{ item.value }}"</span>
+            </template>
+          </li>
+          <li v-if="!items.length && showNoResults" class="ac-empty" role="presentation">{{ noResultsText }}</li>
+        </ul>
+      </Teleport>
     </div>
     <div v-if="errorText || showCounter" class="ac-footer">
       <span v-if="errorText" :id="errorId" class="ac-error" role="alert">{{ errorText }}</span>
@@ -909,15 +1013,30 @@ defineExpose({
   border: 1px solid var(--ac-border);
   border-radius: var(--ac-radius);
   box-shadow: var(--ac-shadow);
-  max-height: 260px;
+  box-sizing: border-box;
+  /*
+   * Size-to-fit: never taller than the design cap, and never taller than the
+   * space actually available (set by JS as `--ac-available-height`). The panel
+   * scrolls internally instead of overflowing its boundary.
+   */
+  max-height: min(var(--ac-listbox-max-height, 260px), var(--ac-available-height, 100vh));
   overflow-y: auto;
 }
 
-/* Flipped above the control when there isn't room below (R1.10). */
+/* Flipped above the control when there isn't room below — in-place mode (R1.10). */
 .ac-listbox--top {
   top: auto;
   bottom: 100%;
   margin: 0 0 4px;
+}
+
+/*
+ * Teleported to `appendTo` (default <body>): position/size come from the inline
+ * style pinning it to the control. A high z-index keeps it above modals and
+ * overlays; override with `--ac-listbox-z`.
+ */
+.ac-listbox--floating {
+  z-index: var(--ac-listbox-z, 9999);
 }
 
 .ac-option {

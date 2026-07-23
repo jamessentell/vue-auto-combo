@@ -13,6 +13,10 @@ function mountCombo(props: Record<string, unknown> = {}, slots: Record<string, s
   const wrapper = mount(AutoCombo, {
     props: {
       options: FRUITS,
+      // Render the panel in place by default so `wrapper.find` reaches it; the
+      // production default teleports it to <body>, out of the wrapper subtree.
+      // Teleport behavior is covered in section 13.
+      appendTo: 'self',
       ...props,
       'onUpdate:modelValue': async (value: string | string[] | null) => {
         await wrapper.setProps({ modelValue: value })
@@ -798,7 +802,8 @@ describe('12. dropdown placement (R1.10)', () => {
         toJSON: () => ({}),
       }) as DOMRect
     const list = wrapper.find('.ac-listbox').element
-    Object.defineProperty(list, 'offsetHeight', { value: panelHeight, configurable: true })
+    // Placement measures the panel's intrinsic height via scrollHeight.
+    Object.defineProperty(list, 'scrollHeight', { value: panelHeight, configurable: true })
     window.innerHeight = viewport
   }
 
@@ -869,6 +874,129 @@ describe('12. dropdown placement (R1.10)', () => {
     await key(wrapper, 'ArrowDown') // reopen
     await wrapper.vm.$nextTick()
     expect(wrapper.find('[role="listbox"]').classes()).not.toContain('ac-listbox--top')
+    wrapper.unmount()
+  })
+
+  it('sizes the panel to the available space via --ac-available-height (R1.11)', async () => {
+    const wrapper = mountCombo()
+    // Control 50px from the top of a 600px viewport, natural list height 900px.
+    // Space below = 600 - 8(margin) - 80(controlBottom) - 4(gap) = 508px.
+    stubGeometry(wrapper, { controlTop: 50, controlBottom: 80, viewport: 600, panelHeight: 900 })
+    await input(wrapper).trigger('focus')
+    await wrapper.vm.$nextTick()
+
+    const listbox = wrapper.find('[role="listbox"]').element as HTMLElement
+    expect(listbox.style.getPropertyValue('--ac-available-height')).toBe('508px')
+    wrapper.unmount()
+  })
+})
+
+describe('13. dropdown teleport, size-to-fit & appendTo (R1.11)', () => {
+  // Teleported to <body>, the panel lives outside the wrapper subtree.
+  const bodyListbox = () => document.querySelector('.ac-listbox') as HTMLElement | null
+  const bodyOptions = () =>
+    Array.from(document.querySelectorAll('.ac-listbox .ac-option')) as HTMLElement[]
+
+  async function settle(wrapper: ReturnType<typeof mountCombo>) {
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.$nextTick()
+  }
+
+  /** Fake the control box, panel intrinsic height, and viewport for the teleported panel. */
+  function stub(
+    wrapper: ReturnType<typeof mountCombo>,
+    opts: { top: number; bottom: number; viewport?: number; natural?: number },
+  ) {
+    const { top, bottom, viewport = 600, natural = 260 } = opts
+    const control = wrapper.find('.ac-control').element
+    control.getBoundingClientRect = () =>
+      ({ top, bottom, left: 40, right: 240, width: 200, height: bottom - top, x: 40, y: top, toJSON: () => ({}) }) as DOMRect
+    const list = bodyListbox()!
+    Object.defineProperty(list, 'scrollHeight', { value: natural, configurable: true })
+    window.innerHeight = viewport
+  }
+
+  it('teleports the panel to <body> by default, outside the component root', async () => {
+    const wrapper = mountCombo({ appendTo: 'body' })
+    await settle(wrapper)
+    await input(wrapper).trigger('focus')
+    await settle(wrapper)
+
+    const list = bodyListbox()
+    expect(list).toBeTruthy()
+    expect(list!.parentElement).toBe(document.body)
+    expect(wrapper.element.contains(list)).toBe(false)
+    expect(list!.classList.contains('ac-listbox--floating')).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('pins the floating panel to the control and sizes it to the viewport', async () => {
+    const wrapper = mountCombo({ appendTo: 'body' })
+    await settle(wrapper)
+    await input(wrapper).trigger('focus')
+    stub(wrapper, { top: 560, bottom: 590, viewport: 600, natural: 400 })
+    window.dispatchEvent(new Event('scroll')) // recompute with the stubbed geometry
+    await settle(wrapper)
+
+    const list = bodyListbox()!
+    // No room below (control at 590 of 600) → flips up; available = spaceAbove
+    // = 560 - 8(margin) - 4(gap) = 548px.
+    expect(list.style.getPropertyValue('--ac-available-height')).toBe('548px')
+    expect(list.style.position).toBe('absolute')
+    // Rendered height = min(natural 400, cap 260, available 548) = 260, so
+    // top = controlTop(560) - 260 - gap(4) = 296px.
+    expect(parseFloat(list.style.top)).toBeCloseTo(296, 0)
+    expect(list.style.width).toBe('200px')
+    wrapper.unmount()
+  })
+
+  it('declares the size-to-fit and z-index rules in CSS', () => {
+    expect(autoComboSource).toMatch(/max-height:\s*min\(var\(--ac-listbox-max-height/)
+    expect(autoComboSource).toMatch(/\.ac-listbox--floating\s*{[^}]*z-index:\s*var\(--ac-listbox-z/s)
+  })
+
+  it('forwards the theme onto the teleported panel so it stays styled', async () => {
+    const wrapper = mountCombo({ appendTo: 'body' })
+    await settle(wrapper)
+    await input(wrapper).trigger('focus')
+    await settle(wrapper)
+
+    // Teleported out of the themed root, the panel carries the resolved theme
+    // (at minimum the text color) as inline style so it isn't rendered unstyled.
+    expect(bodyListbox()!.style.color).not.toBe('')
+
+    // The source forwards the full set of --ac-* theme variables.
+    expect(autoComboSource).toMatch(/const THEME_VARS = \[[^\]]*'--ac-bg'[^\]]*'--ac-shadow'/s)
+    wrapper.unmount()
+  })
+
+  it('still selects a teleported option on click (outside-click guard honors the panel)', async () => {
+    const wrapper = mountCombo({ appendTo: 'body' })
+    await settle(wrapper)
+    await type(wrapper, 'ban')
+    await settle(wrapper)
+
+    const [option] = bodyOptions()
+    expect(option.textContent).toContain('Banana')
+    // mousedown bubbles to the document-level outside-click handler; it must not
+    // close the panel before the click selects.
+    option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+    option.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await settle(wrapper)
+
+    expect(wrapper.props('modelValue')).toBe('Banana')
+    wrapper.unmount()
+  })
+
+  it('appendTo:"self" keeps the panel inside the component subtree', async () => {
+    const wrapper = mountCombo({ appendTo: 'self' })
+    await settle(wrapper)
+    await input(wrapper).trigger('focus')
+    await settle(wrapper)
+
+    const list = wrapper.find('.ac-listbox')
+    expect(list.exists()).toBe(true)
+    expect(list.classes()).not.toContain('ac-listbox--floating')
     wrapper.unmount()
   })
 })

@@ -276,7 +276,7 @@ export const CharacterCounter: Story = {
 }
 
 export const InModalFlipsUp: Story = {
-  name: 'Inside a modal (flips up near the bottom)',
+  name: 'Inside a modal (teleport + flip + size-to-fit)',
   render: (args) => ({
     components: { AutoCombo },
     setup() {
@@ -284,14 +284,16 @@ export const InModalFlipsUp: Story = {
       return { args, value }
     },
     // A fixed-height, overflow-clipped container stands in for a modal body.
-    // The field sits near the bottom edge, so opening the dropdown flips it
-    // above the input instead of being clipped off (R1.10).
+    // The field sits near the bottom edge; the dropdown teleports out (default
+    // appendTo: 'body'), flips up, and is sized to fit — scrolling internally
+    // rather than being clipped or overrunning (R1.10 / R1.11). Set appendTo
+    // to 'self' via the controls to keep it inside the modal instead.
     template: `
       <div style="font-family: system-ui, sans-serif;">
-        <div style="height: 260px; overflow-y: auto; border: 1px solid #d0d4dd; border-radius: 10px; padding: 16px; background: #fff;">
-          <p style="margin: 0 0 180px; color: #666; font-size: 0.85rem;">
-            Scrollable container (like a modal body). The field is near the bottom edge,
-            so opening the dropdown flips it above the input instead of clipping it.
+        <div style="height: 220px; overflow-y: auto; border: 1px solid #d0d4dd; border-radius: 10px; padding: 16px; background: #fff;">
+          <p style="margin: 0 0 150px; color: #666; font-size: 0.85rem;">
+            Scrollable container (like a modal body). The field is near the bottom edge.
+            The dropdown teleports out, flips up, and scrolls internally instead of clipping.
           </p>
           <AutoCombo v-bind="args" v-model="value" />
         </div>
