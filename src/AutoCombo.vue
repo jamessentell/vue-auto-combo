@@ -87,12 +87,14 @@ const statusId = `${uid}-status`
 const errorId = `${uid}-error`
 
 const rootEl = ref<HTMLElement | null>(null)
+const controlEl = ref<HTMLElement | null>(null)
 const inputEl = ref<HTMLInputElement | null>(null)
 const listEl = ref<HTMLElement | null>(null)
 
 const query = ref('')
 const isOpen = ref(false)
 const activeIndex = ref(-1)
+const placement = ref<'bottom' | 'top'>('bottom')
 
 function uniqueValues(values: string[]) {
   return [...new Set(values)]
@@ -159,6 +161,9 @@ const items = computed<ListItem[]>(() => {
 
 watch(items, (list) => {
   activeIndex.value = list.length ? 0 : -1
+  // The panel's height tracks the list, so re-check whether it still fits
+  // below the control while open (R1.10).
+  if (isOpen.value) nextTick(updatePlacement)
 })
 
 // With the no-results row suppressed, an open dropdown with no items renders
@@ -248,17 +253,57 @@ function isSelected(value: string) {
   return selectedValues.value.includes(value)
 }
 
+/**
+ * Bounds (in viewport coordinates) the dropdown must stay visible within: the
+ * nearest overflow-clipping ancestor (a modal body, scroll pane, …), clamped
+ * to the viewport. Falls back to the viewport when nothing above the control
+ * clips overflow.
+ */
+function clipBounds(): { top: number; bottom: number } {
+  const viewportBottom = window.innerHeight || document.documentElement.clientHeight
+  let node = controlEl.value?.parentElement ?? null
+  while (node && node !== document.body && node !== document.documentElement) {
+    const style = getComputedStyle(node)
+    if (/(auto|scroll|hidden|clip)/.test(style.overflowY + style.overflow)) {
+      const rect = node.getBoundingClientRect()
+      return { top: Math.max(rect.top, 0), bottom: Math.min(rect.bottom, viewportBottom) }
+    }
+    node = node.parentElement
+  }
+  return { top: 0, bottom: viewportBottom }
+}
+
+/**
+ * Flip the panel above the control when the list can't fit in the space below
+ * (e.g. the control sits near the bottom of a modal) and there is more room
+ * above; otherwise keep it below. Default is always below (R1.10).
+ */
+function updatePlacement() {
+  const control = controlEl.value
+  const list = listEl.value
+  if (!control || !list) return
+  const controlRect = control.getBoundingClientRect()
+  const bounds = clipBounds()
+  const listHeight = list.offsetHeight
+  const spaceBelow = bounds.bottom - controlRect.bottom
+  const spaceAbove = controlRect.top - bounds.top
+  placement.value = listHeight > spaceBelow && spaceAbove > spaceBelow ? 'top' : 'bottom'
+}
+
 function open() {
   if (props.disabled || isOpen.value) return
   isOpen.value = true
   activeIndex.value = items.value.length ? 0 : -1
   emit('open')
+  // Decide below-vs-above once the panel is in the DOM and measurable (R1.10).
+  nextTick(updatePlacement)
 }
 
 function close() {
   if (!isOpen.value) return
   isOpen.value = false
   activeIndex.value = -1
+  placement.value = 'bottom'
   emit('close')
 }
 
@@ -448,8 +493,23 @@ function onDocumentMousedown(event: MouseEvent) {
   if (!rootEl.value?.contains(event.target as Node)) closeAndReconcile()
 }
 
-onMounted(() => document.addEventListener('mousedown', onDocumentMousedown))
-onBeforeUnmount(() => document.removeEventListener('mousedown', onDocumentMousedown))
+// While the panel is open, keep its placement correct as the page or an
+// ancestor (a modal body) scrolls, or the window resizes. Capture-phase catches
+// scrolls on any ancestor, not just the window (R1.10).
+function onViewportChange() {
+  if (isOpen.value) updatePlacement()
+}
+
+onMounted(() => {
+  document.addEventListener('mousedown', onDocumentMousedown)
+  window.addEventListener('scroll', onViewportChange, true)
+  window.addEventListener('resize', onViewportChange)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', onDocumentMousedown)
+  window.removeEventListener('scroll', onViewportChange, true)
+  window.removeEventListener('resize', onViewportChange)
+})
 
 watch(() => props.disabled, (disabled) => {
   if (disabled) close()
@@ -488,7 +548,7 @@ defineExpose({
   >
     <label v-if="label && !hideLabel" class="ac-label" :for="inputId">{{ label }}</label>
     <div class="ac-field">
-      <div class="ac-control" @mousedown="onControlMousedown">
+      <div ref="controlEl" class="ac-control" @mousedown="onControlMousedown">
         <span v-if="$slots.prefix" class="ac-prefix">
           <slot name="prefix" />
         </span>
@@ -570,6 +630,7 @@ defineExpose({
         :id="listboxId"
         ref="listEl"
         class="ac-listbox"
+        :class="{ 'ac-listbox--top': placement === 'top' }"
         role="listbox"
         :aria-multiselectable="multiple || undefined"
       >
@@ -850,6 +911,13 @@ defineExpose({
   box-shadow: var(--ac-shadow);
   max-height: 260px;
   overflow-y: auto;
+}
+
+/* Flipped above the control when there isn't room below (R1.10). */
+.ac-listbox--top {
+  top: auto;
+  bottom: 100%;
+  margin: 0 0 4px;
 }
 
 .ac-option {

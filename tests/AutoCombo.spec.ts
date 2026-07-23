@@ -774,3 +774,101 @@ describe('11. character counter', () => {
     wrapper.unmount()
   })
 })
+
+describe('12. dropdown placement (R1.10)', () => {
+  // jsdom does no layout, so fake the control's box, the panel's height, and
+  // the viewport height. That gives updatePlacement the same numbers a real
+  // browser would feed it, without needing an actual modal on screen.
+  function stubGeometry(
+    wrapper: ReturnType<typeof mountCombo>,
+    opts: { controlTop: number; controlBottom: number; viewport?: number; panelHeight?: number },
+  ) {
+    const { controlTop, controlBottom, viewport = 600, panelHeight = 260 } = opts
+    const control = wrapper.find('.ac-control').element
+    control.getBoundingClientRect = () =>
+      ({
+        top: controlTop,
+        bottom: controlBottom,
+        left: 0,
+        right: 200,
+        width: 200,
+        height: controlBottom - controlTop,
+        x: 0,
+        y: controlTop,
+        toJSON: () => ({}),
+      }) as DOMRect
+    const list = wrapper.find('.ac-listbox').element
+    Object.defineProperty(list, 'offsetHeight', { value: panelHeight, configurable: true })
+    window.innerHeight = viewport
+  }
+
+  it('flips the dropdown above the control when the list does not fit below', async () => {
+    const wrapper = mountCombo()
+    // Control pinned 10px from the bottom of a 600px viewport: the 260px panel
+    // can't fit below but has ~560px of room above.
+    stubGeometry(wrapper, { controlTop: 560, controlBottom: 590 })
+    await input(wrapper).trigger('focus')
+    await wrapper.vm.$nextTick()
+
+    const listbox = wrapper.find('[role="listbox"]')
+    expect(listbox.isVisible()).toBe(true)
+    expect(listbox.classes()).toContain('ac-listbox--top')
+    wrapper.unmount()
+  })
+
+  it('keeps the dropdown below the control when there is room below', async () => {
+    const wrapper = mountCombo()
+    // Control near the top: plenty of space below for the panel.
+    stubGeometry(wrapper, { controlTop: 20, controlBottom: 50 })
+    await input(wrapper).trigger('focus')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[role="listbox"]').classes()).not.toContain('ac-listbox--top')
+    wrapper.unmount()
+  })
+
+  it('recomputes placement while open when the container scrolls', async () => {
+    const wrapper = mountCombo()
+    stubGeometry(wrapper, { controlTop: 20, controlBottom: 50 })
+    await input(wrapper).trigger('focus')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[role="listbox"]').classes()).not.toContain('ac-listbox--top')
+
+    // Scroll the control down to the bottom edge; the open panel must flip up.
+    const control = wrapper.find('.ac-control').element
+    control.getBoundingClientRect = () =>
+      ({
+        top: 560,
+        bottom: 590,
+        left: 0,
+        right: 200,
+        width: 200,
+        height: 30,
+        x: 0,
+        y: 560,
+        toJSON: () => ({}),
+      }) as DOMRect
+    window.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[role="listbox"]').classes()).toContain('ac-listbox--top')
+    wrapper.unmount()
+  })
+
+  it('resets to opening below the next time it opens', async () => {
+    const wrapper = mountCombo()
+    stubGeometry(wrapper, { controlTop: 560, controlBottom: 590 })
+    await input(wrapper).trigger('focus')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[role="listbox"]').classes()).toContain('ac-listbox--top')
+
+    await key(wrapper, 'Escape') // close
+    expect(wrapper.find('[role="listbox"]').isVisible()).toBe(false)
+    // Now there is room below again before it reopens.
+    stubGeometry(wrapper, { controlTop: 20, controlBottom: 50 })
+    await key(wrapper, 'ArrowDown') // reopen
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[role="listbox"]').classes()).not.toContain('ac-listbox--top')
+    wrapper.unmount()
+  })
+})

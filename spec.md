@@ -28,6 +28,13 @@ third-party runtime dependencies, and follows the
 - **R1.8** Options already selected are marked as selected in the list
   (`aria-selected="true"` plus a visual indicator). In multi-select mode,
   clicking a selected option deselects it (toggle).
+- **R1.10** The dropdown opens below the control by default, but flips to open
+  above it when the list does not fit in the space below and there is more room
+  above. "Space below" is measured against the nearest overflow-clipping
+  ancestor (a modal body or scroll pane), clamped to the viewport — so a field
+  near the bottom of a modal opens upward instead of being clipped off, without
+  relying on `z-index`. Placement is computed when the dropdown opens and kept
+  current while it is open as the window or an ancestor scrolls or resizes.
 
 ## 2. Selection modes
 

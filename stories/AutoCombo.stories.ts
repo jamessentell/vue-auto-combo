@@ -275,6 +275,38 @@ export const CharacterCounter: Story = {
   },
 }
 
+export const InModalFlipsUp: Story = {
+  name: 'Inside a modal (flips up near the bottom)',
+  render: (args) => ({
+    components: { AutoCombo },
+    setup() {
+      const value = ref<string | null>(null)
+      return { args, value }
+    },
+    // A fixed-height, overflow-clipped container stands in for a modal body.
+    // The field sits near the bottom edge, so opening the dropdown flips it
+    // above the input instead of being clipped off (R1.10).
+    template: `
+      <div style="font-family: system-ui, sans-serif;">
+        <div style="height: 260px; overflow-y: auto; border: 1px solid #d0d4dd; border-radius: 10px; padding: 16px; background: #fff;">
+          <p style="margin: 0 0 180px; color: #666; font-size: 0.85rem;">
+            Scrollable container (like a modal body). The field is near the bottom edge,
+            so opening the dropdown flips it above the input instead of clipping it.
+          </p>
+          <AutoCombo v-bind="args" v-model="value" />
+        </div>
+        <p style="margin-top: 1rem; color: #666; font-size: 0.85rem;">
+          v-model: <code>{{ JSON.stringify(value) }}</code>
+        </p>
+      </div>
+    `,
+  }),
+  args: {
+    label: 'Fruit',
+    placeholder: 'Open me — the list flips up',
+  },
+}
+
 // --- Styling (see stories/Styling.mdx for the full class/variable reference) ---
 
 export const ThemingDark: Story = {
