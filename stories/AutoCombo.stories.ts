@@ -275,38 +275,80 @@ export const CharacterCounter: Story = {
   },
 }
 
-export const InModalFlipsUp: Story = {
-  name: 'Inside a modal (teleport + flip + size-to-fit)',
-  render: (args) => ({
+export const AppendToComparison: Story = {
+  name: 'appendTo — body vs self',
+  render: () => ({
     components: { AutoCombo },
     setup() {
-      const value = ref<string | null>(null)
-      return { args, value }
+      const teleported = ref<string | null>(null)
+      const inline = ref<string | null>(null)
+      return { teleported, inline, FRUITS }
     },
-    // A fixed-height, overflow-clipped container stands in for a modal body.
-    // The field sits near the bottom edge; the dropdown teleports out (default
-    // appendTo: 'body'), flips up, and is sized to fit — scrolling internally
-    // rather than being clipped or overrunning (R1.10 / R1.11). Set appendTo
-    // to 'self' via the controls to keep it inside the modal instead.
+    // Two identical `overflow: hidden` boxes; only `appendTo` differs. Open each
+    // field to compare: 'body' (default) teleports the panel out of the box, so
+    // it floats on top and extends past the box — over the content below —
+    // escaping the box's overflow and stacking context. 'self' renders the panel
+    // inside the box, so size-to-fit keeps it within the box and it scrolls
+    // internally (never covering the content below). (R1.11)
     template: `
-      <div style="font-family: system-ui, sans-serif;">
-        <div style="height: 220px; overflow-y: auto; border: 1px solid #d0d4dd; border-radius: 10px; padding: 16px; background: #fff;">
-          <p style="margin: 0 0 150px; color: #666; font-size: 0.85rem;">
-            Scrollable container (like a modal body). The field is near the bottom edge.
-            The dropdown teleports out, flips up, and scrolls internally instead of clipping.
-          </p>
-          <AutoCombo v-bind="args" v-model="value" />
+      <div style="display: flex; gap: 40px; padding: 24px; font-family: system-ui, sans-serif;">
+        <div style="width: 280px;">
+          <h3 style="margin: 0 0 4px; font-size: 0.9rem;">appendTo: 'body' <span style="color:#888;font-weight:400;">(default)</span></h3>
+          <p style="margin: 0 0 10px; color: #666; font-size: 0.8rem;">Teleports out — floats on top, escapes the box.</p>
+          <div style="height: 120px; overflow: hidden; border: 1px solid #d0d4dd; border-radius: 8px; padding: 12px; background: #fbfbfd;">
+            <AutoCombo :options="FRUITS" v-model="teleported" append-to="body" label="Fruit" placeholder="Open me" />
+          </div>
+          <div style="margin-top: 8px; padding: 10px 12px; background: #eef1ff; border-radius: 6px; font-size: 0.8rem; color: #35439c;">Content below the box — the panel floats over this.</div>
         </div>
-        <p style="margin-top: 1rem; color: #666; font-size: 0.85rem;">
-          v-model: <code>{{ JSON.stringify(value) }}</code>
-        </p>
+        <div style="width: 280px;">
+          <h3 style="margin: 0 0 4px; font-size: 0.9rem;">appendTo: 'self'</h3>
+          <p style="margin: 0 0 10px; color: #666; font-size: 0.8rem;">Renders in place — stays inside the box, scrolls.</p>
+          <div style="height: 120px; overflow: hidden; border: 1px solid #d0d4dd; border-radius: 8px; padding: 12px; background: #fbfbfd;">
+            <AutoCombo :options="FRUITS" v-model="inline" append-to="self" label="Fruit" placeholder="Open me" />
+          </div>
+          <div style="margin-top: 8px; padding: 10px 12px; background: #eef1ff; border-radius: 6px; font-size: 0.8rem; color: #35439c;">Content below the box — the panel never reaches this.</div>
+        </div>
       </div>
     `,
   }),
-  args: {
-    label: 'Fruit',
-    placeholder: 'Open me — the list flips up',
-  },
+  // Top-align the canvas so the 'body' panel has room below and opens downward,
+  // clearly extending past its box.
+  parameters: { layout: 'fullscreen' },
+}
+
+export const FlipComparison: Story = {
+  name: 'Flip — opens down vs flips up',
+  render: () => ({
+    components: { AutoCombo },
+    setup() {
+      const down = ref<string | null>(null)
+      const up = ref<string | null>(null)
+      return { down, up, FRUITS }
+    },
+    // `appendTo: 'self'` bounds the flip to each box, so the direction is
+    // deterministic regardless of the viewport: a field near the top has room
+    // below and opens downward; a field near the bottom has none and flips up.
+    // Both are sized to the space available and scroll internally (R1.10).
+    template: `
+      <div style="display: flex; gap: 40px; padding: 24px; font-family: system-ui, sans-serif;">
+        <div style="width: 280px;">
+          <h3 style="margin: 0 0 10px; font-size: 0.9rem;">Room below → opens down</h3>
+          <div style="height: 220px; overflow: auto; border: 1px solid #d0d4dd; border-radius: 8px; padding: 12px; background: #fbfbfd;">
+            <AutoCombo :options="FRUITS" v-model="down" append-to="self" label="Fruit" placeholder="Opens downward" />
+            <div style="height: 150px;"></div>
+          </div>
+        </div>
+        <div style="width: 280px;">
+          <h3 style="margin: 0 0 10px; font-size: 0.9rem;">No room below → flips up</h3>
+          <div style="height: 220px; overflow: auto; border: 1px solid #d0d4dd; border-radius: 8px; padding: 12px; background: #fbfbfd;">
+            <div style="height: 150px;"></div>
+            <AutoCombo :options="FRUITS" v-model="up" append-to="self" label="Fruit" placeholder="Flips upward" />
+          </div>
+        </div>
+      </div>
+    `,
+  }),
+  parameters: { layout: 'centered' },
 }
 
 // --- Styling (see stories/Styling.mdx for the full class/variable reference) ---
