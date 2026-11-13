@@ -8,4 +8,25 @@ updates:
       day: "monday"
       time: "03:00"
       timezone: "America/Chicago"
-    open-pull-requests-limit: 20
+    # Wait a few days after a release before proposing it, so broken or
+    # pulled versions are usually caught upstream first.
+    cooldown:
+      default-days: 3
+    open-pull-requests-limit: 10
+    groups:
+      # One PR per week for all minor and patch bumps.
+      # Major bumps still open as their own PRs so they can be reviewed separately.
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      timezone: "America/Chicago"
+    groups:
+      actions:
+        patterns:
+          - "*"

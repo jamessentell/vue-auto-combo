@@ -229,3 +229,18 @@ pnpm storybook   # interactive demos at http://localhost:6006
 pnpm test        # Vitest component tests (one per spec requirement)
 pnpm build       # library build (ESM + UMD + types) into dist/
 ```
+
+## Releasing
+
+Dependabot opens one grouped PR each Monday for minor and patch updates
+(majors come as separate PRs). Releases go out monthly, or sooner for a fix:
+
+```bash
+git checkout main && git pull
+npm version patch          # or minor; bumps package.json, commits, tags vX.Y.Z
+git push --follow-tags
+```
+
+Pushing the tag runs `.github/workflows/release.yml`, which tests, builds,
+publishes to npm with trusted publishing (no token), and creates a GitHub
+release with generated notes.
