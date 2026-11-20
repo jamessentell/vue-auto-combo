@@ -232,15 +232,22 @@ pnpm build       # library build (ESM + UMD + types) into dist/
 
 ## Releasing
 
-Dependabot opens one grouped PR each Monday for minor and patch updates
-(majors come as separate PRs). Releases go out monthly, or sooner for a fix:
+Every push to `main` publishes a new version. `.github/workflows/release.yml`
+works out the version, tests, builds, publishes to npm with trusted publishing
+(no token) and creates a GitHub release with generated notes.
 
-```bash
-git checkout main && git pull
-npm version patch          # or minor; bumps package.json, commits, tags vX.Y.Z
-git push --follow-tags
-```
+- **Patch releases are automatic:** if `package.json` matches the newest tag,
+  the workflow bumps the patch number (v0.1.2 → 0.1.3), commits that back to
+  `main` and tags it.
+- **Minor and major releases:** set the version in `package.json` yourself
+  (for example `npm version minor --no-git-tag-version` → 0.2.0) and merge.
+  Because it's ahead of the newest tag, that version is released as-is, and
+  patch bumps continue from there (0.2.1, 0.2.2, …).
+- **Skip a release:** put `[skip release]` in the merge commit message.
 
-Pushing the tag runs `.github/workflows/release.yml`, which tests, builds,
-publishes to npm with trusted publishing (no token), and creates a GitHub
-release with generated notes.
+If `main` is protected so that nothing can push to it directly, the workflow's
+version commit needs a bypass. Either add GitHub Actions to the bypass list of
+the rule protecting `main` (if the list offers it), or add a `RELEASE_TOKEN` repository secret (a
+fine-grained token or GitHub App token with Contents: read and write that the
+rule lets push), which the workflow uses instead of the default token.
+The same applies to a rule protecting `v*` tags.
