@@ -22,10 +22,40 @@ jobs:
         run: pnpm test
       - name: Build library
         run: pnpm build
+      - name: Test the built package
+        run: pnpm test:dist && pnpm check:dist
+
+  # package.json promises `vue: ^3.4.0`. Build with the repo's Vue (as releases
+  # are), then run the suite and a load/render check of dist/ on Vue 3.4, so an
+  # API that only newer Vue has (like 3.5's useId in 0.1.2) fails CI.
+  vue-compat:
+    name: Vue ${{ matrix.vue }} compatibility
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        vue: ['3.4.0', '3.4.38']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build library
+        run: pnpm build
+      - name: Install Vue ${{ matrix.vue }}
+        # --ignore-scripts keeps `prepare` from rebuilding dist/ with this Vue.
+        run: pnpm add -D vue@${{ matrix.vue }} --ignore-scripts
+      - name: Run tests on Vue ${{ matrix.vue }}
+        run: pnpm test
+      - name: Test the built package on Vue ${{ matrix.vue }}
+        run: pnpm test:dist && pnpm check:dist
 
   deploy-storybook:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: test
+    needs: [test, vue-compat]
     runs-on: ubuntu-latest
     permissions:
       pages: write

@@ -36,6 +36,9 @@ Or with pnpm:
 pnpm add vue-auto-combo
 ```
 
+Works with Vue 3.4 and later. CI tests every change on Vue 3.4.0, 3.4.38 and the
+current 3.5 release.
+
 Then import the component and its stylesheet:
 
 ```vue
@@ -228,7 +231,13 @@ pnpm install
 pnpm storybook   # interactive demos at http://localhost:6006
 pnpm test        # Vitest component tests (one per spec requirement)
 pnpm build       # library build (ESM + UMD + types) into dist/
+pnpm test:dist   # the same tests against the built package in dist/
+pnpm check:dist  # load dist/ as ESM and CommonJS and server-render it
 ```
+
+To check another Vue version, build first, then swap Vue without rebuilding:
+`pnpm build && pnpm add -D vue@3.4.38 --ignore-scripts && pnpm test && pnpm test:dist && pnpm check:dist`
+(undo with `git checkout package.json pnpm-lock.yaml && pnpm install`).
 
 ## Releasing
 

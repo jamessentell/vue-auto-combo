@@ -41,6 +41,8 @@
     "prepare": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:dist": "AUTO_COMBO_TEST_TARGET=dist vitest run",
+    "check:dist": "node scripts/check-dist.mjs",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },
