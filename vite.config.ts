@@ -3,6 +3,9 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
+// `pnpm test:dist` runs the suite against the built package instead of the source.
+const testDist = process.env.AUTO_COMBO_TEST_TARGET === 'dist'
+
 export default defineConfig({
   plugins: [vue()],
   build: {
@@ -25,5 +28,13 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['tests/**/*.spec.ts'],
     globals: true,
+    alias: testDist
+      ? [
+          {
+            find: /^\.\.\/src\/AutoCombo\.vue$/,
+            replacement: fileURLToPath(new URL('./tests/dist-entry.mjs', import.meta.url)),
+          },
+        ]
+      : [],
   },
 })

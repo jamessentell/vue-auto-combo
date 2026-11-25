@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useUniqueId } from './useUniqueId'
 
 export type AutoComboValue = string | string[] | null
 
@@ -87,7 +88,7 @@ const emit = defineEmits<{
   validation: [valid: boolean, message: string | null]
 }>()
 
-const uid = useId()
+const uid = useUniqueId()
 const inputId = `${uid}-input`
 const listboxId = `${uid}-listbox`
 const selectedDescriptionId = `${uid}-selected`
